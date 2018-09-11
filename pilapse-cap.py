@@ -335,8 +335,15 @@ def create_video(input_fns, output_fn, start_img=0, frame_rate=24, profile="base
         frame_rate_option = ""
     else: 
         frame_rate_option = "-framerate %s" % str(frame_rate)
+
+    # Slightly lower the priorty of the encoding process, in part to allow the API process
+    # improved response time.  I would assume flask really just blocking on requests, so hopefully
+    # the true effect of this is improving latency of the control commands and ensure the
+    # system remains usable.
+    niceness="nice -n 2 "
     cmd = 'avconv -y %s %s %s -profile:v %s -preset %s -vf format=yuv420p %s' % \
           (frame_rate_option, start_number_option, input_fns, profile, preset, output_fn)
+    cmd = niceness+cmd
     #cmd = 'avconv -y -framerate %s -start_number %s -i %s/%s/img%%07d.jpg  -c:v h264_omx -vf format=yuv420p %s/%s' % \
     #      (str(frame_rate), str(start_img), image_dir, seg_str, config['video_path'], fn)
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")
