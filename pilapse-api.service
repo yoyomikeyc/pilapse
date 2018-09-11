@@ -1,0 +1,19 @@
+[Unit]
+Description=Pi Timelapse capture script.
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/work/pilapse/
+ExecStart=/usr/bin/python3 /home/pi/work/pilapse/pilapse-api.py
+#RemainAfterExit=true
+ExecStop=/usr/bin/pkill -f pilapse-api.py
+StandardOutput=journal
+StandardError=journal
+User=pi
+Group=pi
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
