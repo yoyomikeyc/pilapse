@@ -1,6 +1,7 @@
 """Time lapse photography server"""
 import errno
 import os
+import subprocess
 import sys
 import threading
 from datetime import datetime, timedelta
@@ -29,14 +30,15 @@ from message import Message
 # [x] remove old segments
 # [x] http server
 # [X] pylint
-# [ ] ssh keys for easy scp
+# [X] ssh keys for easy scp
 # [ ] while balance
 # [ ] enforce threads not stepping on eachother or make it ok to miss a deadline
 # [ ] Proximity snsor
 # [ ] Led light for recording
 # [X] Package sensor
 # [X] make service
-# [ ] back up or SCP timelapse.mp4 so it is never lost
+# [X] back up or SCP timelapse.mp4 so it is never lost
+# [ ] SMS notification
 
 ##############
 # Constants
@@ -108,13 +110,23 @@ def disable_power_options():
         # PiZero Only
         # https://www.jeffgeerling.com/blogs/jeff-geerling/controlling-pwr-act-leds-raspberry-pi
 
-        # Turn off the Pi Zero ACT LED.
-        cmd = "echo 1 | sudo tee /sys/class/leds/led0/brightness"
+        # Set the Pi Zero ACT LED trigger to 'none'.
+        #cmd1 = "echo none | sudo tee /sys/class/leds/led0/trigger"
+        #run_cmd(cmd1)
+        
+        # Turn off the Pi Zero ACT LED.   
+        #cmd2 = "echo 1 | (sudo tee /sys/class/leds/led0/brightness)"
+        #run_cmd(cmd2)
+        #with open("/sys/class/leds/led0/brightness","w") as f:
+        #    f.write('1\n')
+        cmd="echo 'Pi Zero ACT LED turned off.'"
         run_cmd(cmd)
         
     if config['disable_camera_led']:
         # Turn the camera's LED off
         camera.led = False
+        cmd = "echo 'Camera LED disabled.'"
+        run_cmd(cmd)
         
 def restore_power_options():
     global camera
@@ -129,14 +141,22 @@ def restore_power_options():
     if config['disable_pi_leds']:
         # PiZero Only
         # Set the Pi Zero ACT LED trigger to 'none'.
-        cmd = "echo none | sudo tee /sys/class/leds/led0/trigger"
+        #cmd1 = "echo none | sudo tee /sys/class/leds/led0/trigger"
+        #run_cmd(cmd)
+
+        # Turn on the Pi Zero ACT LED.   
+        #cmd2 = "echo 0 | sudo tee /sys/class/leds/led0/brightness"
+        #run_cmd(cmd2)
+        #with open("/sys/class/leds/led0/brightness","w") as f:
+        #f.write('0\n')
+        cmd = "echo 'Pi Zero ACT LED turned on.'"
         run_cmd(cmd)
 
     if config['disable_camera_led']:
         # Turn the camera's LED on
         camera.led = True
-
-        
+        cmd = "echo 'Camera LED enabled.'"
+        run_cmd(cmd)
 
 
 
@@ -218,7 +238,7 @@ def batch_capture(path, image_num, batch_size, last_capture_time):
             delete_old_images(image_num)
 
         # Book keeping
-        last_capture_time = next_capture_time
+        last_capture_time = now
         next_capture_time = last_capture_time + interval
         image_num += 1
         cnt+=1
@@ -239,25 +259,30 @@ def gen_final_video():
 
 # Declare worker
 def video_worker(seg_num, image_num):
-    input_fns = "-i %s/%s/img%%07d.jpg" % (image_dir, form_segment_name(seg_num))
-    output_fn = "%s/%s.mp4" % (config['video_path'], form_segment_name(seg_num))
+    try:
+        input_fns = "-i %s/%s/img%%07d.jpg" % (image_dir, form_segment_name(seg_num))
+        output_fn = "%s/%s.mp4" % (config['video_path'], form_segment_name(seg_num))
     
-    success = True
-    success &= create_video(input_fns, output_fn, image_num, frame_rate=config['frame_rate'], profile=config['video_profile'], preset=config['video_preset'])
-    if success:
-        success &= append_video_segment(seg_num)
-        # If successful, delete old segment
+        success = True
+        success &= create_video(input_fns, output_fn, image_num, frame_rate=config['frame_rate'], profile=config['video_profile'], preset=config['video_preset'])
         if success:
-            video_cleanup(seg_num)
-            return
-
+            success &= append_video_segment(seg_num)
+            # If successful, delete old segment
+            if success:
+                video_cleanup(seg_num)
+                return
+    except (KeyboardInterrupt, SystemExit) as e:
+        terminate(1)
 
 def gif_worker(seg_num, image_num):
-    success = True
-    success &= create_gif_segment(seg_num, image_num)
-    if success:
-        return
-
+    try:
+        success = True
+        success &= create_gif_segment(seg_num, image_num)
+        if success:
+            return
+    except (KeyboardInterrupt, SystemExit) as e:
+        terminate(1)
+        
 def capture_loop(image_dir, seg_num, image_num):
     # Init
     mailman = Message()
@@ -327,30 +352,60 @@ def delete_old_images(curr_image_num):
         # If we arent required o have a full segment then we cant stop early
 
 
+from paramiko import SSHClient
+from scp import SCPClient
+import paramiko
+        
 def backup_image(fn):
     # Generate file to backup and store to list of pending files to backup.
     statedb['to_backup'].append(fn)
-
+    # Determine if we have enough files to make it worth backing up.
+    if len(statedb['to_backup']) <  config['image_backup_size']:
+        return True
+    
     # hostname destination
-    backup_server = config['backup_server']
-    dest = "%s@%s:%s/" % (backup_server['user'], backup_server['hostname'], backup_server['image_path'])
+    server_details = config['backup_server']
+    #dest = "%s@%s:%s/" % (backup_server['user'], backup_server['hostname'], backup_server['image_path'])
+
+    ssh = SSHClient()
+    ssh.load_system_host_keys()
+    ssh.connect(server_details['hostname'])
+
+    # SCPCLient takes a paramiko transport as an argument
+    scp = SCPClient(ssh.get_transport())
 
     # backup all files 
     overall_success = True
+    new_backup_list = []
     for file in statedb['to_backup']:
-        cmd = "scp %s %s" % (file, dest)
+        #cmd = "scp %s %s" % (file, dest)
         # make this run command silent so that in cases whhen the server is down we dont spam the log indefinitely
-        success = run_cmd(cmd, silent=(not overall_success))
+        #success = run_cmd(cmd, silent=(not overall_success))
+        try:
+            success=True
+            scp.put(file, remote_path=server_details['image_path'])
+        except FileNotFoundError:
+            print("Error, file '%s' not found and thus enable to delete." % file)
+            # Set as successful so we dont keep trying to delete a file that isnt there.
+            success= True
+        except paramiko.ssh_exception.SSHException:
+            print("paramiko.ssh_exception.SSHException: Channel closed?")
+            success= False
+            
         if success:
             # denote file as successfully backed up
-            statedb['to_backup'].remove(file)
+            #statedb['to_backup'].remove(file)
             # Denote that image should be removed
             if config['enable_image_cleanup']:
                 statedb['to_delete'].append(file)
+        else:
+            new_backup_list.append(file)
         overall_success &= success
+        statedb['to_backup']=new_backup_list
+    scp.close()
         
     if not overall_success:
-        print("Failed copying one or more images to %s!" % backup_server['hostname'])
+        print("Failed copying one or more images to %s!" %server_details['hostname'])
     return overall_success
 
 def terminate(ret):
@@ -378,11 +433,11 @@ def run_cmd(cmd, verbose=False, msg=None, silent=False):
         # Put timestamp in log
         time_cmd = NO_BUFFERING
         time_cmd += ("echo -------------------- $(date) -------------------- %s" % redirect)
-        os.system(time_cmd)
+        subprocess.call(time_cmd, shell=True)
         # Put command in log
         echo_cmd = NO_BUFFERING
         echo_cmd += ("echo %s %s" % (cmd, redirect))
-        os.system(echo_cmd)
+        subprocess.call(echo_cmd, shell=True)
     # Redirect output of command to log
     final_cmd = NO_BUFFERING
     final_cmd += ("%s %s" % (cmd, redirect))
@@ -394,7 +449,7 @@ def run_cmd(cmd, verbose=False, msg=None, silent=False):
             myprint(INDENT+msg)
         else:
             myprint(INDENT+cmd)
-    ret_value = os.system(final_cmd)
+    ret_value = subprocess.call(final_cmd, shell=True)
     end_time = datetime.now()
     duration = end_time - start_time
     if verbose:
@@ -516,7 +571,7 @@ def append_video_segment(seg_num):
     abs_ovideo_fn = config['video_path']+'/'+ovideo_fn
 
     # Append new video to old
-    if seg_num == 0:
+    if not file_exists(ivideo_fn):
         cmd = 'cp %s %s' % (abs_new_seg_fn, abs_ovideo_fn)
     else:
         # Create file with list of files to concat
@@ -576,12 +631,6 @@ load_statedb()
 ###################
 # init
 ###################
-
-# Start up the camera.
-camera = PiCamera()
-
-disable_power_options()
-
             
 # Create directory based on current timestamp.
 create_dir(config['image_path'])
@@ -651,6 +700,10 @@ print("\n")
 #sys.exit(1)
 
 try:
+    # Start up the camera.
+    camera = PiCamera()
+    
+    disable_power_options()
     while True:
         capture = mailman.get_capture_status()
         if capture:

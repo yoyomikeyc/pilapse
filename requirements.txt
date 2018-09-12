@@ -2,3 +2,4 @@ pyyaml
 flask
 pytz
 psutil
+scp

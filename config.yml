@@ -60,12 +60,12 @@ resolution:
 
 
 # The interval between captures (in seconds). (float OK)
-interval: 2
-#interval: 20
+#interval: 2
+interval: 20
 
 # frames per segment
-segment_size: 10
-#segment_size: 30
+#segment_size: 10
+segment_size: 30
 
 #########################
 # GIF OPTIONS
@@ -133,6 +133,9 @@ rotation: 90
 
 # True/False: Should the capture engine backup the images to a server as they are captured
 enable_image_backup: True
+
+# Number of images to back up at once.  Minimizes overhead of SSH connection setup
+image_backup_size: 1
 
 # True/False: Should the images be deleted once they are no longer needed.  Needed is defined
 # as "backed up" or "part of video encoding"
