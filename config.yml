@@ -39,16 +39,16 @@ image_path: /home/pi/work/pilapse/images
 # Image resolution Set to empty object (`{ }`) to use default resolution.
 resolution:
 ##### 4:3 #####
-#  width: 640
-#  height: 480
+  width: 640
+  height: 480
 #  width: 1024
 #  height: 768
 #  width: 1296
 #  height: 972
 #  width: 1600
 #  height: 1200
-  width: 2592
-  height: 1944
+#  width: 2592
+#  height: 1944
 ##### 16:7 #####
 #  width: 1920
 #  height: 1080
@@ -60,10 +60,12 @@ resolution:
 
 
 # The interval between captures (in seconds). (float OK)
-interval: 20
+interval: 2
+#interval: 20
 
 # frames per segment
-segment_size: 30
+segment_size: 10
+#segment_size: 30
 
 #########################
 # GIF OPTIONS
@@ -130,17 +132,19 @@ rotation: 90
 
 
 # True/False: Should the capture engine backup the images to a server as they are captured
-enable_backup: True
+enable_image_backup: True
 
-delete_image_after_backup: True
+# True/False: Should the images be deleted once they are no longer needed.  Needed is defined
+# as "backed up" or "part of video encoding"
+enable_image_cleanup: True
 
 backup_server:
   # Hostname of server
-  hostname: vpn
+  hostname: localhost
   # User to scp as during backup
   user: pi
-  # path on the server to scp files into
-  image_path: ~mcarchia/pilapse/images
+  # path on the server to scp files into. This path must already exist on server.
+  image_path: /tmp/
 
 #############################
 # Power/heat saving options #                   

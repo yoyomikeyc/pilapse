@@ -49,3 +49,4 @@ reset:
 	$(RM) $(IMAGE_PATH)/*
 	$(RM) $(VIDEO_PATH)/*
 	$(RM) $(GIF_PATH)/*
+	$(RM) pilapse.db

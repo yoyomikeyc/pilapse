@@ -53,7 +53,7 @@ class AbortCapture(Exception):
     pass
 
 ##############
-# Globals
+# State related
 ##############
 STATE_DB_FN="pilapse.db"
 
@@ -63,12 +63,18 @@ def load_statedb():
     global statedb
 
     if file_exists(STATE_DB_FN):
-        statedb = pickle.load(STATE_DB_FN}
+        # open the file for reading
+        f = open(STATE_DB_FN,'rb')
+        statedb = pickle.load(f)
+        f.close()
     return statedb
 
 def save_statedb():
     global statedb
-    pickle.dump(statedb, STATE_DB_FN)
+
+    # open the file for writing
+    f = open(STATE_DB_FN,'wb')
+    pickle.dump(statedb, f)
 
 ##################################################################################
 #
@@ -86,7 +92,7 @@ def create_dir(dir):
 
 def file_exists(fn):
     f = Path(fn)
-    return f.is_file():
+    return f.is_file()
 
 
 def disable_power_options():
@@ -204,11 +210,11 @@ def batch_capture(path, image_num, batch_size, last_capture_time):
             continue
 
         # backup image to server if specified
-        if config['server_backup']:
+        if config['enable_image_backup']:
             backup_image(image_abs_fn)
                 
         # delete any old image(s)
-        if config['delete_image_after_backup']:
+        if config['enable_image_cleanup']:
             delete_old_images(image_num)
 
         # Book keeping
@@ -264,7 +270,7 @@ def capture_loop(image_dir, seg_num, image_num):
     
     while True:
         try:
-            print("============================================ Segment # %d ============================================" % (seg_num))
+            print("========================================== Segment # %d ==========================================" % (seg_num))
             seg_str = form_segment_name(seg_num)
             full_path = image_dir + '/' + seg_str
             create_dir(full_path)
@@ -295,22 +301,30 @@ def capture_loop(image_dir, seg_num, image_num):
 def delete_old_images(curr_image_num):
     for file in statedb['to_delete']:
         (seg_num, image_num) = extract_from_abs_fn(file)
-        if not seg_num or not image_num:
-            print("filename is invalid.  Couldnt not delete")
+        if seg_num is None or image_num is None:
+            print("filename %s is invalid.  Couldnt not delete" % file)
             continue
-        # For an image to be "old" and no longer needed:
+        # For an image to be "old" and no longer needed we need to possibly consider:
         # 1) its index is greater than a batch size away and thus it has already been added to a segment video.
         # 2) It is not contained in the list of files still to be backed up
-        old_enough = image_num < (curr_image_num - config['segment_size'])
+        old_enough = image_num < (curr_image_num - 2*config['segment_size'])
         backed_up = file not in statedb['to_backup']
-        if old_enough and backed_up:
+        ok_to_delete = True
+        if config['enable_image_backup']:
+            ok_to_delete = ok_to_delete and backed_up
+        need_full_segment = config['create_video'] or config['create_gif']
+        if need_full_segment:
+            ok_to_delete = ok_to_delete and old_enough
+        if ok_to_delete:
             cmd = "rm -f %s" % file
             success = run_cmd(cmd)
             if success:
-                statedb['to_delete'].pop[0]
+                statedb['to_delete'].pop(0)
         # Since the list is in ascending order, once we find a file that is too new, we are done.
-        if not old_enough:
-            break
+        if need_full_segment:
+            if not old_enough:
+                break
+        # If we arent required o have a full segment then we cant stop early
 
 
 def backup_image(fn):
@@ -325,17 +339,18 @@ def backup_image(fn):
     overall_success = True
     for file in statedb['to_backup']:
         cmd = "scp %s %s" % (file, dest)
-        success = run_cmd(cmd)
+        # make this run command silent so that in cases whhen the server is down we dont spam the log indefinitely
+        success = run_cmd(cmd, silent=(not overall_success))
         if success:
-            # denote file as successfully backedup
+            # denote file as successfully backed up
             statedb['to_backup'].remove(file)
             # Denote that image should be removed
-            if config['delete_image_after_backup']:
-                statedb['to_delete'].append(fn)
+            if config['enable_image_cleanup']:
+                statedb['to_delete'].append(file)
         overall_success &= success
         
     if not overall_success:
-        print("Failed copying one or more images to %s!", config['server_hostname'])
+        print("Failed copying one or more images to %s!" % backup_server['hostname'])
     return overall_success
 
 def terminate(ret):
@@ -344,39 +359,49 @@ def terminate(ret):
     restore_power_options()
     sys.exit(ret)
 
-REDIRECT_ALL_OUTPUT = ">> %s 2>&1" % SYSTEM_LOG
+REDIRECT_TO_LOG = ">> %s 2>&1" % SYSTEM_LOG
+REDIRECT_TO_NULL= ">> /dev/null 2>&1" 
 NO_BUFFERING = "stdbuf -o0 "
 
         
-def run_cmd(cmd, verbose=False, msg=None):
+def run_cmd(cmd, verbose=False, msg=None, silent=False):
     """Run a command at shell prompt and optionally time/print messages"""
-    # Put timestamp in log
-    time_cmd = NO_BUFFERING
-    time_cmd += ("echo -------------------- $(date) -------------------- %s" % REDIRECT_ALL_OUTPUT)
-    os.system(time_cmd)
-    # Put command in log
-    echo_cmd = NO_BUFFERING
-    echo_cmd += ("echo %s %s" % (cmd, REDIRECT_ALL_OUTPUT))
-    os.system(echo_cmd)
+    def myprint(s):
+        if not silent:
+            print(s)
+    if silent:
+        redirect = REDIRECT_TO_NULL
+    else:
+        redirect = REDIRECT_TO_LOG
+        
+    if not silent:
+        # Put timestamp in log
+        time_cmd = NO_BUFFERING
+        time_cmd += ("echo -------------------- $(date) -------------------- %s" % redirect)
+        os.system(time_cmd)
+        # Put command in log
+        echo_cmd = NO_BUFFERING
+        echo_cmd += ("echo %s %s" % (cmd, redirect))
+        os.system(echo_cmd)
     # Redirect output of command to log
     final_cmd = NO_BUFFERING
-    final_cmd += ("%s %s" % (cmd, REDIRECT_ALL_OUTPUT))
+    final_cmd += ("%s %s" % (cmd, redirect))
     # Run command
     INDENT = "\t\t\t\t\t\t\t\t\t\t\t\t"
     start_time = datetime.now()
     if verbose:
         if msg:
-            print(INDENT+msg)
+            myprint(INDENT+msg)
         else:
-            print(INDENT+cmd)
+            myprint(INDENT+cmd)
     ret_value = os.system(final_cmd)
     end_time = datetime.now()
     duration = end_time - start_time
     if verbose:
         mystr = "-->  Duration : %s seconds" % str(duration.seconds)
-        print(INDENT+mystr)
+        myprint(INDENT+mystr)
     if ret_value != 0:
-        print("Command Failed! : "+cmd)
+        myprint("Command Failed! : "+cmd)
     # Return True of success. (unlike unix)
     success = not ret_value
     return success
