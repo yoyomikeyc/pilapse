@@ -39,8 +39,8 @@ image_path: /home/pi/work/pilapse/images
 # Image resolution Set to empty object (`{ }`) to use default resolution.
 resolution:
 ##### 4:3 #####
-  width: 640
-  height: 480
+#  width: 640
+#  height: 480
 #  width: 1024
 #  height: 768
 #  width: 1296
@@ -52,8 +52,8 @@ resolution:
 ##### 16:7 #####
 #  width: 1920
 #  height: 1080
-#  width: 2560
-#  height: 1440
+  width: 2560
+  height: 1440
 
 
 
@@ -135,7 +135,7 @@ rotation: 90
 enable_image_backup: True
 
 # Number of images to back up at once.  Minimizes overhead of SSH connection setup
-image_backup_size: 1
+image_backup_size: 2
 
 # True/False: Should the images be deleted once they are no longer needed.  Needed is defined
 # as "backed up" or "part of video encoding"
