@@ -52,6 +52,24 @@ POLL_PERIOD = 0.2
 class AbortCapture(Exception):
     pass
 
+##############
+# Globals
+##############
+STATE_DB_FN="pilapse.db"
+
+statedb = {'to_delete':[],'to_backup':[]}
+
+def load_statedb():
+    global statedb
+
+    if file_exists(STATE_DB_FN):
+        statedb = pickle.load(STATE_DB_FN}
+    return statedb
+
+def save_statedb():
+    global statedb
+    pickle.dump(statedb, STATE_DB_FN)
+
 ##################################################################################
 #
 # Functions
@@ -65,6 +83,11 @@ def create_dir(dir):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
+
+def file_exists(fn):
+    f = Path(fn)
+    return f.is_file():
+
 
 def disable_power_options():
     global camera
@@ -87,7 +110,7 @@ def disable_power_options():
         # Turn the camera's LED off
         camera.led = False
         
-def enable_power_options():
+def restore_power_options():
     global camera
     
     # enable hdmi
@@ -145,15 +168,15 @@ def set_camera_options(camera):
     return camera
 
 
-def batch_capture(path, image_num, batch_size, last_capture):
+def batch_capture(path, image_num, batch_size, last_capture_time):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
     cnt = image_num % config['segment_size']
     
     # Init time markers
     interval = timedelta(seconds=config['interval'])
-    if last_capture is None:
-        last_capture = datetime.now()
-    next_capture = last_capture + interval
+    if last_capture_time is None:
+        last_capture_time = datetime.now()
+    next_capture_time = last_capture_time + interval
 
     # Capture images
     while cnt < batch_size:
@@ -163,27 +186,37 @@ def batch_capture(path, image_num, batch_size, last_capture):
                 
         now = datetime.now()
         #If not time yet, sleep and check again
-        if now < next_capture:
+        if now < next_capture_time:
             sleep(POLL_PERIOD)
             continue
         msg = "Capturing image #%d    Time: %s     Delta: %s" % \
-              (image_num, str(now), str(now-last_capture))
+              (image_num, str(now), str(now-last_capture_time))
         print(msg)
         sys.stdout.flush()
             
         # Capture a picture.
-        image_str = 'img{0:07d}.jpg'.format(image_num)
+        image_fn = form_image_fn(image_num)
+        image_abs_fn = path + '/' + image_fn
         try: 
-            camera.capture(path + '/' +image_str)
+            camera.capture(image_abs_fn)
         except PiCameraRuntimeError:
             print("ERROR: Timed out waiting for capture to end!")
             continue
+
+        # backup image to server if specified
+        if config['server_backup']:
+            backup_image(image_abs_fn)
+                
+        # delete any old image(s)
+        if config['delete_image_after_backup']:
+            delete_old_images(image_num)
+
         # Book keeping
-        last_capture = next_capture
-        next_capture = last_capture + interval
+        last_capture_time = next_capture_time
+        next_capture_time = last_capture_time + interval
         image_num += 1
         cnt+=1
-    return (last_capture, image_num)
+    return (last_capture_time, image_num)
 
 #
 
@@ -200,8 +233,8 @@ def gen_final_video():
 
 # Declare worker
 def video_worker(seg_num, image_num):
-    input_fns = "-i %s/%s/img%%07d.jpg" % (image_dir, segment_name(seg_num))
-    output_fn = "%s/%s.mp4" % (config['video_path'], segment_name(seg_num))
+    input_fns = "-i %s/%s/img%%07d.jpg" % (image_dir, form_segment_name(seg_num))
+    output_fn = "%s/%s.mp4" % (config['video_path'], form_segment_name(seg_num))
     
     success = True
     success &= create_video(input_fns, output_fn, image_num, frame_rate=config['frame_rate'], profile=config['video_profile'], preset=config['video_preset'])
@@ -227,17 +260,17 @@ def capture_loop(image_dir, seg_num, image_num):
     # Init camera
     set_camera_options(camera)
    
-    last_capture = None
+    last_capture_time = None
     
     while True:
         try:
             print("============================================ Segment # %d ============================================" % (seg_num))
-            seg_str = segment_name(seg_num)
+            seg_str = form_segment_name(seg_num)
             full_path = image_dir + '/' + seg_str
             create_dir(full_path)
 
             # Capture n images
-            (last_capture, next_image_num) = batch_capture(full_path, image_num, config['segment_size'], last_capture) 
+            (last_capture_time, next_image_num) = batch_capture(full_path, image_num, config['segment_size'], last_capture_time) 
 
             if config['create_gif']:
                 # Start thread to run concurrently
@@ -247,6 +280,7 @@ def capture_loop(image_dir, seg_num, image_num):
             if config['create_video']:
                 # Start thread to run concurrently
                 t = threading.Thread(target=video_worker, args=(seg_num, image_num)).start()
+
             # Increment segment number
             seg_num += 1
             image_num = next_image_num
@@ -258,18 +292,61 @@ def capture_loop(image_dir, seg_num, image_num):
             camera.close()
             raise e
 
+def delete_old_images(curr_image_num):
+    for file in statedb['to_delete']:
+        (seg_num, image_num) = extract_from_abs_fn(file)
+        if not seg_num or not image_num:
+            print("filename is invalid.  Couldnt not delete")
+            continue
+        # For an image to be "old" and no longer needed:
+        # 1) its index is greater than a batch size away and thus it has already been added to a segment video.
+        # 2) It is not contained in the list of files still to be backed up
+        old_enough = image_num < (curr_image_num - config['segment_size'])
+        backed_up = file not in statedb['to_backup']
+        if old_enough and backed_up:
+            cmd = "rm -f %s" % file
+            success = run_cmd(cmd)
+            if success:
+                statedb['to_delete'].pop[0]
+        # Since the list is in ascending order, once we find a file that is too new, we are done.
+        if not old_enough:
+            break
+
+
+def backup_image(fn):
+    # Generate file to backup and store to list of pending files to backup.
+    statedb['to_backup'].append(fn)
+
+    # hostname destination
+    backup_server = config['backup_server']
+    dest = "%s@%s:%s/" % (backup_server['user'], backup_server['hostname'], backup_server['image_path'])
+
+    # backup all files 
+    overall_success = True
+    for file in statedb['to_backup']:
+        cmd = "scp %s %s" % (file, dest)
+        success = run_cmd(cmd)
+        if success:
+            # denote file as successfully backedup
+            statedb['to_backup'].remove(file)
+            # Denote that image should be removed
+            if config['delete_image_after_backup']:
+                statedb['to_delete'].append(fn)
+        overall_success &= success
+        
+    if not overall_success:
+        print("Failed copying one or more images to %s!", config['server_hostname'])
+    return overall_success
 
 def terminate(ret):
     print('\nTime-lapse capture process cancelled.\n')
-    enable_power_options()
+    save_statedb()
+    restore_power_options()
     sys.exit(ret)
 
 REDIRECT_ALL_OUTPUT = ">> %s 2>&1" % SYSTEM_LOG
 NO_BUFFERING = "stdbuf -o0 "
 
-def segment_name(seg_num):
-    """Forms segment identiifer"""
-    return 'seg{0:07d}'.format(seg_num)
         
 def run_cmd(cmd, verbose=False, msg=None):
     """Run a command at shell prompt and optionally time/print messages"""
@@ -301,7 +378,8 @@ def run_cmd(cmd, verbose=False, msg=None):
     if ret_value != 0:
         print("Command Failed! : "+cmd)
     # Return True of success. (unlike unix)
-    return not ret_value
+    success = not ret_value
+    return success
 
 
 def get_all_images(path, descending=True):
@@ -348,11 +426,33 @@ def create_video(input_fns, output_fn, start_img=0, frame_rate=24, profile="base
     #      (str(frame_rate), str(start_img), image_dir, seg_str, config['video_path'], fn)
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")
     return success
-                    
+         
+
+def form_segment_name(seg_num):
+    """Forms segment identiifer"""
+    return 'seg{0:07d}'.format(seg_num)
+
+def extract_from_abs_fn(abs_fn):
+    """Returns tuple containing seg_num and image_num extracted from image filename"""
+    m = re.match(".*/seg(\d{7})/img(\d{7})\.jpg$", abs_fn)
+    if m:
+        seg_num = int(m.group(1)) 
+        image_num = int(m.group(2))
+        return (seg_num, image_num)
+    return (None, None)
+      
+def form_image_fn(image_num):
+    return 'img{0:07d}.jpg'.format(image_num)
+
+def form_image_abs_fn(seg_num, image_num):
+    image_fn = form_image_fn(image_num)
+    image_abs_fn = "%s/%s/%s" % (image_dir, form_segment_name(seg_num), image_fn)
+    return image_abs_fn
+
 # Create segment video    
 def create_video_segment(seg_num, start_img):
     #print("Creating video segment")
-    seg_str = segment_name(seg_num)
+    seg_str = form_segment_name(seg_num)
     fn = '%s.mp4' % seg_str
     frame_rate = config['frame_rate']
     # Helpful Link:
@@ -371,7 +471,7 @@ def create_video_segment(seg_num, start_img):
 def create_gif_segment(seg_num, start_img):
     # Create an animated gif (Requires ImageMagick).
     #    print('\nCreating animated gif.\n')
-    seg_str = segment_name(seg_num)
+    seg_str = form_segment_name(seg_num)
     fn = '%s.gif' % seg_str
     cmd = 'convert -delay 10 -loop 0 %s/%s/img*.jpg %s/%s' % (image_dir, seg_str, config['gif_path'], fn)                
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")             
@@ -380,7 +480,7 @@ def create_gif_segment(seg_num, start_img):
 def append_video_segment(seg_num):
     #print("Appending segment")
     # Form absolute path for segment file
-    seg_str = segment_name(seg_num)
+    seg_str = form_segment_name(seg_num)
     new_seg_fn = '%s.mp4' % seg_str
     abs_new_seg_fn = config['video_path']+'/'+new_seg_fn
     # Form absolute path for input video
@@ -412,8 +512,7 @@ def append_video_segment(seg_num):
          success = run_cmd(cmd)
     # Rename tmp as new full timelapse mpeg
     # If tmp doesnt exist, its possible the encoding failed or the user aborted 
-    tmp = Path(abs_ovideo_fn)
-    if tmp.is_file():
+    if file_exists(abs_ovideo_fn):
         # file exists, so delete old copy and rename tmp to new copy
         cmd = 'mv %s %s' % (abs_ovideo_fn, abs_ivideo_fn)
         success = run_cmd(cmd)
@@ -421,12 +520,12 @@ def append_video_segment(seg_num):
         success = False
     return success
 
-        
+
 def video_cleanup(seg_num):
     """Remove old artifacts of the encoding / capture process"""
     # Remove old segments
     seg_to_delete = seg_num - SEGMENT_DELETION_DELAY
-    seg_str = segment_name(seg_num)
+    seg_str = form_segment_name(seg_num)
     old_seg_fn = '%s.mp4' % seg_str
     abs_old_seg_fn = config['video_path']+'/' + old_seg_fn
     success = False
@@ -437,9 +536,9 @@ def video_cleanup(seg_num):
         success = True
     return success
 
-###################
-# Read config file
-###################
+######################
+# Read config & state
+######################
 
 # Log that process was started
 cmd = 'echo Timelapse capture process started' 
@@ -447,6 +546,7 @@ run_cmd(cmd)
 
 config = config.load_config()
 
+load_statedb()
 
 ###################
 # init

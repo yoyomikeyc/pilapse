@@ -31,6 +31,11 @@
 # GENERAL VIDEO OPTIONS
 #########################
 
+# Diretories for files
+video_path: /home/pi/work/pilapse/videos
+gif_path:   /home/pi/work/pilapse/gifs
+image_path: /home/pi/work/pilapse/images
+
 # Image resolution Set to empty object (`{ }`) to use default resolution.
 resolution:
 ##### 4:3 #####
@@ -115,9 +120,40 @@ white_balance: { }
 # Rotate the images taken by the camera. Possible value are 0, 90, 180 or 270
 rotation: 90
 
+
+#############################
+# Server options
+#############################
+
+# Server needs to be able to accept incoming ssh/scp connections using private/public key
+# Authentication.
+
+
+# True/False: Should the capture engine backup the images to a server as they are captured
+enable_backup: True
+
+delete_image_after_backup: True
+
+backup_server:
+  # Hostname of server
+  hostname: vpn
+  # User to scp as during backup
+  user: pi
+  # path on the server to scp files into
+  image_path: ~mcarchia/pilapse/images
+
 #############################
 # Power/heat saving options #                   
 #############################
+
+# Reducing power on the Pi has the effect of reducing heat (eg, this becomes a problem 
+# when encoding high res video on a Pi 0 inside an enclosure with no heat sink), 
+# reducing power consumption (a concern if attempting to run of battery), and minimizing 
+# the possibility of voltage dips if the SSD card and other peripherals are consuming 
+# current at a level near what the power supply can be putting out.  With no extra
+# peripherals, it's likely that > 1A supply will be necessary for most use cases.  
+# If you experience random crashes, you can try minimizing power consumption with 
+# the below options.
 
 # Disabling HDMI can save about 25mA
 # https://www.jeffgeerling.com/blogs/jeff-geerling/raspberry-pi-zero-conserve-energy
@@ -132,7 +168,3 @@ disable_pi_leds: True
 # sufficient privileges (typically this means running as root with sudo python)
 disable_camera_led: True
 
-# Diretories for files
-video_path: /home/pi/work/pilapse/videos
-gif_path:   /home/pi/work/pilapse/gifs
-image_path: /home/pi/work/pilapse/images
