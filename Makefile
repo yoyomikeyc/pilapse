@@ -29,6 +29,8 @@ uninstall:
 	sudo systemctl disable pilapse-cap.service
 	sudo systemctl disable pilapse-api.service
 
+api2:
+	$(PYTHON) app.py
 api:
 	$(PYTHON) pilapse-api.py
 capture:
@@ -43,10 +45,11 @@ pip:
 lint:
 	$(PYLINT) *.py
 clean:
-	$(RM) *.gif *~ series-* __pycache__ pilapse-system.log
+	find . -name '*~' -type f -delete
+	$(RM) __pycache__ pilapse-system.log
 
 reset:
 	$(RM) $(IMAGE_PATH)/*
 	$(RM) $(VIDEO_PATH)/*
 	$(RM) $(GIF_PATH)/*
-	$(RM) pilapse.db
+	$(RM) pilapse.db pilapse-sqlite.db

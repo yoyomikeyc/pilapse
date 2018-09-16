@@ -1,0 +1,22 @@
+<!doctype html>
+<title>Pilapse - Timelapse Video Server</title>
+<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
+<div class=page>
+  <h1 style="text-align:center"><a href="{{ url_for('homepage') }}">Pilapse - Timelapse Video Server</a></h1>
+  <div class=metanav>
+  {% if not session.logged_in %}
+  {% else %}
+    {% if session.is_admin %}
+      <a href="{{ url_for('admin') }}">admin</a>
+    {% endif %}
+    <a href="{{ url_for('private_timeline') }}">timeline</a>
+    <a href="{{ url_for('post') }}">post message</a>
+    <a href="{{ url_for('about') }}">about</a>
+    <a href="{{ url_for('logout') }}">log out</a>
+  {% endif %}
+  </div>
+  {% for message in get_flashed_messages() %}
+    <div class=flash>{{ message }}</div>
+  {% endfor %}
+  {% block body %}{% endblock %}
+</div>

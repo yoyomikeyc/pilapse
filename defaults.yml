@@ -28,16 +28,17 @@
 # +-----------------------------------------------------------------------------+----------+
 
 #########################
-# GENERAL VIDEO OPTIONS
+# Image Capture Options
 #########################
 
+# Should pilapse start capturing at startup
+capture_enable: False
+
 # Diretories for files
-video_path: /home/pi/work/pilapse/videos
-gif_path:   /home/pi/work/pilapse/gifs
-image_path: /home/pi/work/pilapse/images
+capture_image_path: /home/pi/work/pilapse/images
 
 # Image resolution Set to empty object (`{ }`) to use default resolution.
-resolution:
+capture_resolution:
 ##### 4:3 #####
 #  width: 640
 #  height: 480
@@ -56,75 +57,76 @@ resolution:
   height: 1440
 
 
-
-
-
 # The interval between captures (in seconds). (float OK)
-#interval: 2
-interval: 20
+#capture_interval: 2
+capture_interval: 20
 
-# frames per segment
-#segment_size: 10
-segment_size: 30
+# Advanced Capture settings 
+
+# ISO value. 0 = auto, 60-800 for manual ISO.
+capture_iso: 0
+
+# Shutter speed. 0 = auto, else value in microseconds (seconds * 1000000).
+capture_shutter_speed: 0
+
+# White balance. Set to empty object (`{ }`) to use auto white balance.
+capture_white_balance: { }
+  # red_gain: 1.3
+  # blue_gain: 1.75
+
+# Rotate the images taken by the camera. Possible value are 0, 90, 180 or 270
+capture_rotation: 90
+
 
 #########################
-# GIF OPTIONS
+# GIF Encoding Options
 #########################
 
 # Whether to create an gif after capturing the time-lapse images.
-create_gif: False
+encoder_gif_create: False
 
-#########################
-# MPEG ENCODING OPTIONS
-#########################
+encoder_gif_path:   /home/pi/work/pilapse/gifs
+
+##############################
+# MPEG Video Encoding Options
+##############################
 # See https://trac.ffmpeg.org/wiki/Encode/H.264 for more information
 
 # Whether to create an video after capturing the time-lapse images.
-create_video: True
+encoder_video_create: True
+
+# Path to store videos into
+encoder_video_path: /home/pi/work/pilapse/videos
+
+# frames per segment
+#encoder_frames_per_segment: 10
+encoder_video_frames_per_segment: 30
 
 # Output video's frame rate
-frame_rate: 25
+encoder_video_frame_rate: 25
 
 # HW Codec only seems to support 4:3
 
 
 # Specifies the encoding output to a specific H.264 profile
 # Options: baseline, main, high, high10, high422, high444
-video_profile: baseline
+encoder_video_profile: baseline
 
 # A preset is a collection of options that will provide a certain encoding speed to compression ratio. A slower preset
 # will provide better compression (compression is quality per filesize).
 # Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
-video_preset:  veryfast
-
-hq_frame_rate: 24
-hq_video_profile: baseline 
-hq_video_preset: veryfast
+encoder_video_preset:  veryfast
 
 # Filename of created video
-output_filename: timelapse.mp4
+encoder_video_output_filename: timelapse.mp4
 
-#####################
-# Advanced settings #
-#####################
-
-# ISO value. 0 = auto, 60-800 for manual ISO.
-iso: 0
-
-# Shutter speed. 0 = auto, else value in microseconds (seconds * 1000000).
-shutter_speed: 0
-
-# White balance. Set to empty object (`{ }`) to use auto white balance.
-white_balance: { }
-  # red_gain: 1.3
-  # blue_gain: 1.75
-
-# Rotate the images taken by the camera. Possible value are 0, 90, 180 or 270
-rotation: 90
+encoder_hq_video_frame_rate: 24
+encoder_hq_video_profile: baseline 
+encoder_hq_video_preset: veryfast
 
 
 #############################
-# Server options
+# Backup options
 #############################
 
 # Server needs to be able to accept incoming ssh/scp connections using private/public key
@@ -132,14 +134,14 @@ rotation: 90
 
 
 # True/False: Should the capture engine backup the images to a server as they are captured
-enable_image_backup: True
+backup_enable: True
 
 # Number of images to back up at once.  Minimizes overhead of SSH connection setup
-image_backup_size: 2
+backup_size: 2
 
 # True/False: Should the images be deleted once they are no longer needed.  Needed is defined
 # as "backed up" or "part of video encoding"
-enable_image_cleanup: True
+backup_enable_image_cleanup: True
 
 backup_server:
   # Hostname of server
@@ -148,6 +150,16 @@ backup_server:
   user: pi
   # path on the server to scp files into. This path must already exist on server.
   image_path: /tmp/
+
+#########################
+# Users
+#########################
+
+admin_username: admin
+
+admin_password: admin
+
+admin_email: yoyomikeyc@gmail.com
 
 #############################
 # Power/heat saving options #                   
@@ -164,14 +176,14 @@ backup_server:
 
 # Disabling HDMI can save about 25mA
 # https://www.jeffgeerling.com/blogs/jeff-geerling/raspberry-pi-zero-conserve-energy
-disable_hdmi: True
+power_disable_hdmi: True
 
 # Disabling LEDs can save about 5mA per LED
 # https://www.jeffgeerling.com/blogs/jeff-geerling/raspberry-pi-zero-conserve-energy
-disable_pi_leds: True
+power_disable_pi_leds: True
 
 # The v1 camera has an LED that can be disabed.
 # Requires that RPi.GPIO package installed, and the Python capture process is running with
 # sufficient privileges (typically this means running as root with sudo python)
-disable_camera_led: True
+power_disable_camera_led: True
 

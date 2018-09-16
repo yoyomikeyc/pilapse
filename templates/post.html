@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+{% block body %}
+  <h2>Post Message</h2>
+  <form action="{{ url_for('post') }}" method=post>
+    <dl>
+      <dt>Message:</dt>
+      <dd><textarea name="content" size="350"></textarea></dd>
+      <dd><input type="submit" value="Post" /></dd>
+    </dl>
+  </form>
+{% endblock %}
