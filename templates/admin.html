@@ -12,13 +12,13 @@
     <td>
       <table style="border: 1px solid #afafaf; border-collapse: collapse; width: 100%; text-align: left">
 	<tr>
-	  <td>CPU Temperature</td><td>{{ stats.tempc }}</td>
+	  <td>CPU Temperature:</td><td>{{ stats.tempc }}</td>
 	</tr>
 	<tr>
-	  <td>Memory</td><td>{{ stats.ram_used }} of {{ stats.ram_total }} used ({{ stats.ram_percent_used }})<br>{{ stats.ram_free }} free</td>
+	  <td>Memory:</td><td>{{ stats.ram_used }} of {{ stats.ram_total }} used ({{ stats.ram_percent_used }})<br>{{ stats.ram_free }} free</td>
 	</tr>
 	<tr>
-	  <td>Storage</td><td>{{ stats.disk_used }} of {{ stats.disk_total }} used ({{ stats.disk_percent_used }})<br>{{ stats.disk_free }} free</td>
+	  <td>Storage:</td><td>{{ stats.disk_used }} of {{ stats.disk_total }} used ({{ stats.disk_percent_used }})<br>{{ stats.disk_free }} free</td>
 	</tr>
       </table>
     </td>
@@ -45,20 +45,28 @@
       </form>
     </td>
     <td>
+      <form action="{{ url_for('user_list') }}" method="get">
+	<dl>
+	  <dd><input type="submit" value="Edit Users">
+	</dl>
+      </form>
+    </td>
+    <td>
       <form action="{{ url_for('shutdown') }}" method="post">
 	<dl>
 	  <dd><input type="submit" value="System Shutdown">
 	</dl>
       </form>
     </td>
-    </tr>
+
+  </tr>
 </table>
 
 <h3>Settings</h3>
 <br>
 <form action="{{ url_for('settings') }}" method="post">
-  <table  style="border-bottom: 1px solid #ddd; width=100%">
-    <tr><th>Setting</th><th style="width:300px">Value</th><th style="width:200px">Help</th></tr>
+  <table style="border-bottom: 1px solid #ddd; width=100%">
+    <tr><th>Setting</th><th style="width:200px">Value</th><th style="width:250px">Help</th></tr>
     {% for sf in setting_forms %}
       <tr><td>{{ sf.title }}</td><td>{{ sf.form|safe }}</td><td>{{ sf.help|safe }}</td></tr>
     {% endfor %}

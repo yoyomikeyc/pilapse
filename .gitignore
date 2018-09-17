@@ -1,6 +1,6 @@
 # Project specific files
-messages
 pilapse.db
+pilapse-sqlite.db
 images/
 videos/
 

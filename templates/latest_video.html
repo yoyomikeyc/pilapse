@@ -1,6 +1,11 @@
 {% extends "layout.html" %}
 {% block body %}
-  <h2>Latest Video</h2>
+<h2>Latest Video</h2>
+<br>
+<table border=0>
+  <tr><td>Capture state: {{ stats.capture|safe }}</td></tr>
+  <tr><td>Last video encoding: {{ stats.update_time }}</td></tr>
+</table>
   <video style="display:block; margin: 0 auto;" width="640" height="480" class="center" controls>
     <source src="/videos/timelapse.mp4" type="video/mp4">
       Your browser does not support the video tag.

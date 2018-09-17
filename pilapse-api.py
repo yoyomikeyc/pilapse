@@ -10,10 +10,10 @@ from flask import request
 from flask import session
 from flask import url_for, abort, render_template, flash, send_from_directory
 from functools import wraps
-from hashlib import md5
 from peewee import *
 import config
 
+from pw import encode_pw
 
 import psutil
 import pi_psutil
@@ -139,8 +139,15 @@ class Settings(BaseModel):
     key = TextField()
     value = TextField()
 
-    def get_value(key):
-        return Settings.get(Settings.key==key).value
+    def get_value(key, type=str):
+        value = Settings.get(Settings.key==key).value
+        if type == bool:
+            return value == "True"
+        if type == int:
+            return int(value)
+        if type == float:
+            return float(value)
+        return str(value)
 
     def upsert(key, value):
         try:
@@ -274,13 +281,13 @@ def homepage():
     # depending on whether the requesting user is logged in or not, show them
     # either the public timeline or their own private timeline
     if session.get('logged_in'):
-        return private_timeline()
+        return latest_video()
     else:
         return login()
 
-@app.route('/private/')
+@app.route('/latest_video/')
 @login_required
-def private_timeline():
+def latest_video():
     # the private timeline exemplifies the use of a subquery -- we are asking for
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
@@ -289,7 +296,8 @@ def private_timeline():
                 .select()
                 .where(Message.user << user.following())
                 .order_by(Message.pub_date.desc()))
-    return object_list('private_messages.html', messages, 'message_list')
+    stats=get_system_stats()
+    return object_list('latest_video.html', messages, 'message_list', stats=stats)
 
 @app.route('/public/')
 def public_timeline():
@@ -305,10 +313,6 @@ def videos(path):
         
     return send_from_directory(static_url_path, path)
     
-
-def encode_pw(pw):
-    """encode clear text string"""
-    return md5((pw).encode('utf-8')).hexdigest()
 
 @app.route('/join/', methods=['GET', 'POST'])
 def join():
@@ -375,7 +379,7 @@ def get_system_stats():
     stats['update_time'] = update_time_str
     
     # Get capture status
-    capture = Settings.get_value('capture_enable')
+    capture = Settings.get_value('capture_enable', type=bool)
     if capture:
         capture='<font size="4" color="red">Recording</font>'
     else:
