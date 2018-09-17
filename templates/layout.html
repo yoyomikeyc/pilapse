@@ -7,8 +7,9 @@
   {% if not session.logged_in %}
   {% else %}
   {% if session.is_admin %}
-    <left><a href="{{ url_for('admin') }}">admin</a></left>
-  {% endif %}
+    <a href="{{ url_for('admin') }}">admin</a>    
+    <a href="{{ url_for('user_list') }}">user mgmt</a>
+    {% endif %}
     <a href="{{ url_for('latest_video') }}">latest video</a>
     <a href="{{ url_for('post') }}">post message</a>
     <a href="{{ url_for('about') }}">about</a>

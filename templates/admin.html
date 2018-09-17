@@ -29,7 +29,7 @@
 
 <h3>Actions</h3>
 <table border="0" width="100%">
-  <tr>
+  <tr valign="bottom">
     <td>
       <form action="{{ url_for('startCapture') }}" method="post">
 	<dl>
@@ -40,18 +40,13 @@
     <td>
       <form action="{{ url_for('stopCapture') }}" method="post">
 	<dl>
+	  <dd>Session Description:</dd>
+	  <dd><textarea name="session_description" rows="2" cols="50"></textarea></dd>
 	  <dd><input type="submit" value="Stop Capture">
 	</dl>
       </form>
     </td>
-    <td>
-      <form action="{{ url_for('user_list') }}" method="get">
-	<dl>
-	  <dd><input type="submit" value="Edit Users">
-	</dl>
-      </form>
-    </td>
-    <td>
+     <td>
       <form action="{{ url_for('shutdown') }}" method="post">
 	<dl>
 	  <dd><input type="submit" value="System Shutdown">

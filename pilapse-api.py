@@ -132,12 +132,9 @@ def latest_video():
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
     user = get_current_user()
-    messages = (Message
-                .select()
-                .where(Message.user << user.following())
-                .order_by(Message.pub_date.desc()))
-    stats=get_system_stats()
-    return object_list('latest_video.html', messages, 'message_list', stats=stats)
+    sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
+    stats = get_system_stats()
+    return object_list('latest_video.html', sessions, 'session_list', stats=stats)
 
 @app.route('/public/')
 def public_timeline():
@@ -368,15 +365,16 @@ def startCapture():
     flash('Capture started.')
     return redirect(url_for('admin'))
 
-
 @app.route('/stopCapture', methods=['POST'])
 @login_required
 @admin_required
 def stopCapture():
     Settings.upsert('capture_enable', False)
     flash('Capture stopped.')
-    return redirect(url_for('admin'))
 
+    Sessions.end_session(description=request.form['session_description'])
+
+    return redirect(url_for('admin'))
 
 @app.route('/shutdown', methods=['POST'])
 @login_required

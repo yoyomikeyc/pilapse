@@ -14,7 +14,7 @@ from pathlib import Path
 import config
 from picamera import PiCamera, PiCameraRuntimeError
 
-from db_model import create_tables, Settings
+from db_model import create_tables, Settings, State, Sessions
 #######
 # (Life Rate)    x      (Reduction factor)      = (Slowed Rate)
 # (24frames/1s)  x  (1s/10min)  x  (1min/60s)   = (0.04 frame/s)
@@ -196,8 +196,9 @@ def set_camera_options(camera):
     return camera
 
 
-def batch_capture(camera, path, image_num, batch_size, last_capture_time):
+def batch_capture(camera, path, batch_size, last_capture_time):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
+    image_num = State.get_image_num()
     cnt = image_num % Settings.get_value('encoder_video_frames_per_segment', type=int)
     
     # Init time markers
@@ -242,9 +243,9 @@ def batch_capture(camera, path, image_num, batch_size, last_capture_time):
         last_capture_time = now
         next_capture_time = last_capture_time + interval
         image_num += 1
+        State.set_image_num(image_num)
         cnt+=1
-    return (last_capture_time, image_num)
-
+    return last_capture_time
 #
 
 def gen_final_video():
@@ -289,7 +290,7 @@ def gif_worker(seg_num, image_num):
     except (KeyboardInterrupt, SystemExit) as e:
         terminate(1)
         
-def capture_loop(image_dir, seg_num, image_num):
+def capture_loop(image_dir):
     # Start up the camera.
     camera = PiCamera()
     # Init camera
@@ -298,30 +299,36 @@ def capture_loop(image_dir, seg_num, image_num):
     disable_power_options(camera)
     
     last_capture_time = None
-    
+
+    # Create session in db
+    Sessions.start_session()
+
+    seg_num = State.get_seg_num()
+
     while True:
         try:
             print("========================================== Segment # %d ==========================================" % (seg_num))
             seg_str = form_segment_name(seg_num)
             full_path = image_dir + '/' + seg_str
             create_dir(full_path)
+            seg_start_image_num = State.get_image_num()
 
             # Capture n images
             segment_size = Settings.get_value('encoder_video_frames_per_segment', type=int)
-            (last_capture_time, next_image_num) = batch_capture(camera, full_path, image_num, segment_size, last_capture_time) 
+            last_capture_time = batch_capture(camera, full_path, segment_size, last_capture_time) 
 
             if Settings.get_value('encoder_gif_create', type=bool):
                 # Start thread to run concurrently
-                t = threading.Thread(target=gif_worker, args=(seg_num, image_num)).start()
+                t = threading.Thread(target=gif_worker, args=(seg_num, seg_start_image_num)).start()
 
             # Create video segment and append to prior segments.
             if Settings.get_value('encoder_video_create', type=bool):
                 # Start thread to run concurrently
-                t = threading.Thread(target=video_worker, args=(seg_num, image_num)).start()
+                t = threading.Thread(target=video_worker, args=(seg_num, seg_start_image_num)).start()
 
             # Increment segment number
             seg_num += 1
-            image_num = next_image_num
+            State.set_seg_num(seg_num)
             
         except (AbortCapture):
             restore_power_options(camera)
@@ -657,25 +664,28 @@ if Settings.get_value('encoder_gif_create', type=bool):
 # Determine last image/segment
 ################################
 
-seg_num  = 0
-image_num = 0
+if State.get_image_num() is None:
+    State.set_image_num(0)
+if State.get_seg_num() is None:
+    State.set_seg_num(0)
+
+#seg_num  = 0
+#image_num = 0
 
 # Get descending sorted list of all images in images folder
-all_images =  get_all_images(Settings.get_value('capture_image_path'))
+#all_images =  get_all_images(Settings.get_value('capture_image_path'))
                             
 # Extract next image number and next segment number
-if all_images:
-    # Get all segments in most recent series
-    last_image = all_images[0]
-    m = re.match(".*/seg(\d{7})/img(\d{7})\.jpg$", last_image)
-    seg_num = int(m.group(1))+1 
-    image_num = int(m.group(2))+1
-    # if next image is the first in the segment then increment the segment number because
-    # the prior segment is complete.
-    #if (image_num % config['segment_size']) == 0:
-    #    seg_num += 1
-else:
-    print("No prior images found.")
+#if all_images:
+#    # Get all segments in most recent series
+#    last_image = all_images[0]
+#    m = re.match(".*/seg(\d{7})/img(\d{7})\.jpg$", last_image)
+#    seg_num = int(m.group(1))+1 
+#    image_num = int(m.group(2))+1
+#else:
+#    print("No prior images found.")
+
+
 
 ##################################
 # Create directory for new series
@@ -698,8 +708,8 @@ create_dir(image_dir)
 # Kick off the capture process.
 
 print("------------------------------------------------------------------------------------")
-print("Start image     : #%d" % image_num)
-print("Start segment   : #%d" % seg_num)
+print("Start image     : #%d" % State.get_image_num())
+print("Start segment   : #%d" % State.get_seg_num())
 print("Image directory : %s" % image_dir)
 print("Recording       : %s" %  Settings.get_value('capture_enable', type=bool))
 print("------------------------------------------------------------------------------------")
@@ -712,7 +722,7 @@ print("\n")
 try:
     while True:
         if Settings.get_value('capture_enable', type=bool):
-            capture_loop(image_dir, seg_num, image_num)
+            capture_loop(image_dir)
         sleep(POLL_PERIOD)
 except (KeyboardInterrupt, SystemExit):
     terminate(1)

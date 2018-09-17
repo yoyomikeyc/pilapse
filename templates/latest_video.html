@@ -11,8 +11,8 @@
       Your browser does not support the video tag.
   </video>
   <ul>
-    {% for message in message_list %}
-      <li>{% include "includes/message.html" %}</li>
+    {% for session in session_list %}
+      <li>{% include "includes/session.html" %}</li>
     {% endfor %}
   </ul>
   {% include "includes/pagination.html" %}
