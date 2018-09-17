@@ -144,6 +144,19 @@ class Settings(BaseModel):
         except IntegrityError:
             pass
 
+    def insert(key, value):
+        """insert (key,value) into settings table if not present.  Returns true if actually created."""
+        try:
+            with database.atomic():
+                #Upsert
+                setting, created = Settings.get_or_create(
+                    key=key,
+                    defaults={'value': value}
+                )
+                return created
+        except IntegrityError:
+            pass
+
     def seed():
         # Load config from yaml
         yaml_config = config.load_config()
@@ -153,7 +166,7 @@ class Settings(BaseModel):
             if "admin" in key:
                 continue
             # Create setting
-            Settings.upsert(key, value)
+            Settings.insert(key, value)
 
 
 # simple utility function to create and seed tables

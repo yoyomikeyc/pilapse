@@ -66,9 +66,9 @@
 <br>
 <form action="{{ url_for('settings') }}" method="post">
   <table style="border-bottom: 1px solid #ddd; width=100%">
-    <tr><th>Setting</th><th style="width:200px">Value</th><th style="width:250px">Help</th></tr>
+    <tr><th>Feature</th><th style="width:200px">Value</th><th style="width:300px">Additional Details</th></tr>
     {% for sf in setting_forms %}
-      <tr><td>{{ sf.title }}</td><td>{{ sf.form|safe }}</td><td>{{ sf.help|safe }}</td></tr>
+      <tr><td>{{ sf.title|safe }}</td><td>{{ sf.form|safe }}</td><td style="font-size:12px">{{ sf.help|safe }}</td></tr>
     {% endfor %}
   </table>
   <dl>

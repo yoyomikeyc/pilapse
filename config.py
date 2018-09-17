@@ -4,7 +4,7 @@ import os
 import yaml
 
 class SettingsBase():
-    CSS_WIDTH_STR = 'style="width:300px"'
+    CSS_WIDTH_STR = 'style="width:250px"'
     def __init__(self, title="", help="", mutable=True, gui=True):
         self.mutable = mutable
         self.gui = gui
@@ -105,29 +105,29 @@ mapping = {
     'encoder_video_path'                  : SettingsStr(title="Path to store videos"),
     'encoder_video_frames_per_segment'    : SettingsInt(title="Number of frames in encoding segment",
                                                         min=1),
-    'encoder_video_frame_rate'      : SettingsInt(title="Frame rate of video (real-time video)",
+    'encoder_video_frame_rate'      : SettingsInt(title="Frame rate of video<br>(real-time video)",
                                                   min=1),
-    'encoder_video_profile'         : SettingsList(title="ffmpeg encoding profile (real-time video)",
-                                                   help="Used to specify the H.264 profile.  Options: baseline, main, high, high10, high422, high444.  See https://trac.ffmpeg.org/wiki/Encode/H.264 for more information",
+    'encoder_video_profile'         : SettingsList(title="ffmpeg encoding profile<br>(real-time video)",
+                                                   help='Used to specify the H.264 profile.  Options: baseline, main, high, high10, high422, high444.  See <a href="https://trac.ffmpeg.org/wiki/Encode/H.264">https://trac.ffmpeg.org/wiki/Encode/H.264</a> for more information',
                                                    options=profiles),
-    'encoder_video_preset'          : SettingsList(title="ffmpeg encoding presets (real-time video)",
-                                                   help="A preset is a collection of options that will provide a certain encoding speed to compression ratio. A slower preset will provide better compression.  Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow. See https://trac.ffmpeg.org/wiki/Encode/H.264 for more information",
+    'encoder_video_preset'          : SettingsList(title="ffmpeg encoding presets<br>(real-time video)",
+                                                   help='A preset is a collection of options that will provide a certain encoding speed to compression ratio. A slower preset will provide better compression.  Options: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow. See <a href="https://trac.ffmpeg.org/wiki/Encode/H.264">https://trac.ffmpeg.org/wiki/Encode/H.264</a> for more information',
                                                    options=presets),
     'encoder_video_output_filename' : SettingsStr(title="Filename of generated video"),
-    'encoder_hq_video_frame_rate'   : SettingsInt(title="Frame rate of video (high quality)",
+    'encoder_hq_video_frame_rate'   : SettingsInt(title="Frame rate of video<br>(high quality)",
                                                   min=1),
-    'encoder_hq_video_profile'      : SettingsList(title="ffmpeg encoding profile (high quality)",
+    'encoder_hq_video_profile'      : SettingsList(title="ffmpeg encoding profile<br>(high quality)",
                                                    options=profiles),
-    'encoder_hq_video_preset'       : SettingsList(title="ffmpeg encoding presets (high quality)",
+    'encoder_hq_video_preset'       : SettingsList(title="ffmpeg encoding presets<br>(high quality)",
                                                    options=presets),
 # Backup options
     'backup_enable'               : SettingsList(title="Backup raw images",
                                                  options=bools),
     'backup_size'                 : SettingsInt(min=1,
                                                 title="Number of images to backup at once",
-                                                help="Number of images to back up at once.  Larger numbers Minimize overhead of SSH connection setup but may delay image capture."),
+                                                help="Number of images to backup at once.  Larger numbers minimize the overhead of setting up an SSH connection but may delay image capture."),
     'backup_enable_image_cleanup' : SettingsList(title="Delete images after backup",
-                                                 help="Used to ensure there storage space on local device.",
+                                                 help="Used to free up disk space if backing up to external server.",
                                                  options=bools),
     'backup_server'               : SettingsStr(title="Server connection information"),
 # Power/heat saving options #

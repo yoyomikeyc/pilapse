@@ -96,8 +96,7 @@ def file_exists(fn):
     return f.is_file()
 
 
-def disable_power_options():
-    global camera
+def disable_power_options(camera):
     # disable hdmi
     if Settings.get_value('power_disable_hdmi', type=bool):
         cmd = "/usr/bin/tvservice -o"
@@ -127,8 +126,7 @@ def disable_power_options():
         cmd = "echo 'Camera LED disabled.'"
         run_cmd(cmd)
         
-def restore_power_options():
-    global camera
+def restore_power_options(camera):
     
     # enable hdmi
     if Settings.get_value('power_disable_hdmi', type=bool):
@@ -198,7 +196,7 @@ def set_camera_options(camera):
     return camera
 
 
-def batch_capture(path, image_num, batch_size, last_capture_time):
+def batch_capture(camera, path, image_num, batch_size, last_capture_time):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
     cnt = image_num % Settings.get_value('encoder_video_frames_per_segment', type=int)
     
@@ -292,12 +290,13 @@ def gif_worker(seg_num, image_num):
         terminate(1)
         
 def capture_loop(image_dir, seg_num, image_num):
-    # Init
-    global camera
-
+    # Start up the camera.
+    camera = PiCamera()
     # Init camera
     set_camera_options(camera)
-   
+    # Lower power consumption
+    disable_power_options(camera)
+    
     last_capture_time = None
     
     while True:
@@ -309,7 +308,7 @@ def capture_loop(image_dir, seg_num, image_num):
 
             # Capture n images
             segment_size = Settings.get_value('encoder_video_frames_per_segment', type=int)
-            (last_capture_time, next_image_num) = batch_capture(full_path, image_num, segment_size, last_capture_time) 
+            (last_capture_time, next_image_num) = batch_capture(camera, full_path, image_num, segment_size, last_capture_time) 
 
             if Settings.get_value('encoder_gif_create', type=bool):
                 # Start thread to run concurrently
@@ -325,9 +324,11 @@ def capture_loop(image_dir, seg_num, image_num):
             image_num = next_image_num
             
         except (AbortCapture):
+            restore_power_options(camera)
             camera.close()
             return
         except (KeyboardInterrupt, SystemExit) as e:
+            restore_power_options(camera)
             camera.close()
             raise e
 
@@ -421,7 +422,6 @@ def backup_image(fn):
 def terminate(ret):
     print('\nTime-lapse capture process cancelled.\n')
     save_statedb()
-    restore_power_options()
     sys.exit(ret)
 
 REDIRECT_TO_LOG = ">> %s 2>&1" % SYSTEM_LOG
@@ -635,9 +635,8 @@ def video_cleanup(seg_num):
 cmd = 'echo Timelapse capture process started' 
 run_cmd(cmd)
 
-#config = config.load_config()
 
-#load_statedb()
+load_statedb()
 create_tables()
 
 ###################
@@ -711,10 +710,6 @@ print("\n")
 #sys.exit(1)
 
 try:
-    # Start up the camera.
-    camera = PiCamera()
-    
-    disable_power_options()
     while True:
         if Settings.get_value('capture_enable', type=bool):
             capture_loop(image_dir, seg_num, image_num)
