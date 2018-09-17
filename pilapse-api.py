@@ -12,6 +12,7 @@ from flask import url_for, abort, render_template, flash, send_from_directory
 from functools import wraps
 from peewee import *
 import config
+from hashlib import md5
 
 from pw import encode_pw
 
@@ -388,20 +389,38 @@ def get_system_stats():
 
     # Temp Status
     tempc = pi_psutil.get_cpu_temperature()
-    stats['tempc'] = "%2.1f C" % tempc
+    color = "green"
+    if tempc > 70:
+        color = "orange"
+    if tempc > 80:
+        color = "red"
+    stats['tempc'] = tempc
+    stats['tempc_str'] = '<font color="%s">%2.1f C</font>' % (color, tempc)
 
     # RAM
     ram = psutil.virtual_memory()
     stats['ram_total'] = "%dMB" % (ram.total / 2**20)       # MiB.
     stats['ram_used'] = "%dMB" % (ram.used / 2**20)
-    stats['ram_free'] = "%dMB" % (ram.free / 2**20)
+    ram_free = (ram.free / 2**20)
+    color = "green"
+    if ram_free < 64:
+        color = "orange"
+    if ram_free < 32:
+        color = "red"
+    stats['ram_free'] = '<font color="%s">%dMB</font>' % (color, ram_free)
     stats['ram_percent_used'] = "%2.1f%%" % (ram.percent)
 
     # DISK
     disk = psutil.disk_usage('/')
     stats['disk_total'] = "%2.1fGB" % (disk.total / 2**30)     # GiB.
     stats['disk_used'] = "%2.1fGB" % (disk.used / 2**30)
-    stats['disk_free'] = "%2.1fGB" % (disk.free / 2**30)
+    disk_free = (disk.free / 2**30)
+    color = "green"
+    if disk_free < 1:
+        color = "orange"
+    if disk_free < 0.5:
+        color = "red"
+    stats['disk_free'] = '<font color="%s">%2.1fGB</font>' % (color, disk_free)
     stats['disk_percent_used'] = "%2.1f%%" % (disk.percent)
     
     return stats

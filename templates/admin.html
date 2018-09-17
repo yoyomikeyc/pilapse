@@ -12,13 +12,13 @@
     <td>
       <table style="border: 1px solid #afafaf; border-collapse: collapse; width: 100%; text-align: left">
 	<tr>
-	  <td>CPU Temperature:</td><td>{{ stats.tempc }}</td>
+	  <td>CPU Temperature:</td><td>{{ stats.tempc_str|safe }}</td>
 	</tr>
 	<tr>
-	  <td>Memory:</td><td>{{ stats.ram_used }} of {{ stats.ram_total }} used ({{ stats.ram_percent_used }})<br>{{ stats.ram_free }} free</td>
+	  <td>Memory:</td><td>{{ stats.ram_used }} of {{ stats.ram_total }} used ({{ stats.ram_percent_used }})<br>{{ stats.ram_free|safe }} free</td>
 	</tr>
 	<tr>
-	  <td>Storage:</td><td>{{ stats.disk_used }} of {{ stats.disk_total }} used ({{ stats.disk_percent_used }})<br>{{ stats.disk_free }} free</td>
+	  <td>Storage:</td><td>{{ stats.disk_used }} of {{ stats.disk_total }} used ({{ stats.disk_percent_used }})<br>{{ stats.disk_free|safe }} free</td>
 	</tr>
       </table>
     </td>

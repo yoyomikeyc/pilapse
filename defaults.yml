@@ -35,7 +35,7 @@
 capture_enable: False
 
 # Diretories for files
-capture_image_path: /home/pi/work/pilapse/images
+capture_image_path: /home/pi/work/pilapse/media/images
 
 # Image resolution Set to empty object (`{ }`) to use default resolution.
 capture_resolution:
@@ -85,7 +85,7 @@ capture_rotation: 90
 # Whether to create an gif after capturing the time-lapse images.
 encoder_gif_create: False
 
-encoder_gif_path:   /home/pi/work/pilapse/gifs
+encoder_gif_path:   /home/pi/work/pilapse/media/gifs
 
 ##############################
 # MPEG Video Encoding Options
@@ -96,7 +96,7 @@ encoder_gif_path:   /home/pi/work/pilapse/gifs
 encoder_video_create: True
 
 # Path to store videos into
-encoder_video_path: /home/pi/work/pilapse/videos
+encoder_video_path: /home/pi/work/pilapse/media/videos
 
 # frames per segment
 #encoder_frames_per_segment: 10

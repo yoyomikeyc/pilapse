@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := all
 
-IMAGE_PATH=./images/
-VIDEO_PATH=./videos/
-GIF_PATH=./gifs/
+IMAGE_PATH=./media/images/
+VIDEO_PATH=./media/videos/
+GIF_PATH=./media/gifs/
 
 CP=cp
 RM=\rm -rf
@@ -17,7 +17,7 @@ influx:
 	sudo apt-get install influxdb
 
 install:
-	sudo $(CP) *.service /etc/systemd/system/
+	sudo $(CP) ./systemd/*.service /etc/systemd/system/
 	sudo systemctl start  pilapse-cap.service
 	sudo systemctl start  pilapse-api.service
 	sudo systemctl enable pilapse-cap.service
