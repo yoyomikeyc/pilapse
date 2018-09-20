@@ -134,8 +134,6 @@ def latest_video():
     user = get_current_user()
     sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
 
-    #sessions = [ {'description' : s.description, 'started_at' : convert_utc_to_system_tz(pytz.UTC.localize(s.started_at)).strftime("%Y-%m-%d, %H:%M:%S %Z")} for s in sessions]
-
     stats = get_system_stats()
     return object_list('latest_video.html', sessions, 'session_list', stats=stats, Settings=Settings)
 
@@ -206,18 +204,23 @@ def about():
 
 def get_system_stats():
     stats={}
-
+    TIME_FORMAT = "%Y-%m-%d, %H:%M:%S %Z"
+    
     # Get last update of video
     video_path = Settings.get_value('encoder_video_path') + '/' + Settings.get_value('encoder_video_output_filename')
+
+    system_tz = Settings.get_value('general_timezone')
     try:
         update_time = os.path.getmtime(video_path)
         update_time =  pytz.utc.localize(datetime.datetime.utcfromtimestamp(update_time))
-        system_tz = Settings.get_value('general_timezone')
         update_time = update_time.astimezone(timezone(system_tz))
-        update_time_str = update_time.strftime("%Y-%m-%d, %H:%M:%S %Z")
+        update_time_str = update_time.strftime(TIME_FORMAT)
     except FileNotFoundError:
         update_time_str = "None"
     stats['update_time'] = update_time_str
+    # Get the current time
+    now =  pytz.utc.localize(datetime.datetime.utcnow()).astimezone(timezone(system_tz))
+    stats['now'] = now.strftime(TIME_FORMAT)
     
     # Get capture status
     capture = Settings.get_value('capture_enable', type=bool)

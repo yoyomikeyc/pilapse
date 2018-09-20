@@ -12,6 +12,9 @@
     <td>
       <table style="border: 1px solid #afafaf; border-collapse: collapse; width: 100%; text-align: left">
 	<tr>
+	  <td>Current Time:</td><td>{{ stats.now|safe }}</td>
+	</tr>
+	<tr>
 	  <td>CPU Temperature:</td><td>{{ stats.tempc_str|safe }}</td>
 	</tr>
 	<tr>
