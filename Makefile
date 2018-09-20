@@ -16,24 +16,26 @@ PYLINT=pylint $(PYLINT_ARGS)
 influx:
 	sudo apt-get install influxdb
 
-install:
-	sudo $(CP) ./systemd/*.service /etc/systemd/system/
+start:
 	sudo systemctl start  pilapse-cap.service
 	sudo systemctl start  pilapse-api.service
+
+stop:
+	sudo systemctl stop pilapse-cap.service
+	sudo systemctl stop pilapse-api.service
+
+install:
+	sudo $(CP) ./systemd/*.service /etc/systemd/system/
 	sudo systemctl enable pilapse-cap.service
 	sudo systemctl enable pilapse-api.service
 
-uninstall:
-	sudo systemctl stop pilapse-cap.service
-	sudo systemctl stop pilapse-api.service
+uninstall: stop
 	sudo systemctl disable pilapse-cap.service
 	sudo systemctl disable pilapse-api.service
 
-api2:
-	$(PYTHON) app.py
 api:
 	$(PYTHON) pilapse-api.py
-capture:
+cap:
 	$(PYTHON) pilapse-cap.py
 
 all: capture

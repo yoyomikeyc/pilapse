@@ -50,7 +50,7 @@ class Sessions(BaseModel):
         """Returns the number of frames in this session.  If the session is not complete, the number of frames so far is used."""
         image_end = self.image_end 
         if image_end is None:
-            image_end = State.get_image_num()
+            image_end = States.get_image_num()
         # image_start / image_end are inclusive.
         return (image_end - self.image_start) + 1
 
@@ -83,7 +83,7 @@ class Sessions(BaseModel):
             with database.atomic():
                 try:
                     session = Sessions.get(Sessions.ended_at.is_null())
-                    image_num = State.get_image_num()
+                    image_num = States.get_image_num()
                     # If the image number hasnt been incremented, then this session contains no images.
                     if session.image_start == image_num:
                         session.delete_instance()
@@ -98,7 +98,7 @@ class Sessions(BaseModel):
         except IntegrityError:
             pass
     def start_session():
-        image_num = State.get_image_num()
+        image_num = States.get_image_num()
         session, created = \
             Sessions.get_or_create(image_start=image_num, defaults={ \
                                                                      'image_end' : None,
@@ -108,7 +108,7 @@ class Sessions(BaseModel):
             )
         
 # the user model specifies its fields (or columns) declaratively, like django
-class User(BaseModel):
+class Users(BaseModel):
     username = CharField(unique=True, null=False)
     password = CharField(null=False)
     email = CharField(null=False, unique=True)
@@ -121,7 +121,7 @@ class User(BaseModel):
 
         admin_role = Roles.get(Roles.name=="admin")
         # Create admin user
-        user, created = User.get_or_create(
+        user, created = Users.get_or_create(
             username = yaml_config['admin_username'],
             defaults={
                 'password': encode_pw(yaml_config['admin_password']),
@@ -135,31 +135,31 @@ class User(BaseModel):
     # example, "give me all the users this user is following":
     def following(self):
         # query other users through the "relationship" table
-        return (User
+        return (Users
                 .select()
-                .join(Relationship, on=Relationship.to_user)
-                .where(Relationship.from_user == self)
-                .order_by(User.username))
+                .join(Relationships, on=Relationships.to_user)
+                .where(Relationships.from_user == self)
+                .order_by(Users.username))
 
     def is_role(self, role):
-        return (User
+        return (Users
                 .select()
-                .join(Roles, on=(User.role_id ==Roles.id))
+                .join(Roles, on=(Users.role_id ==Roles.id))
                 .where(Roles.name == role).exists())
     
     def followers(self):
-        return (User
+        return (Users
                 .select()
-                .join(Relationship, on=Relationship.from_user)
-                .where(Relationship.to_user == self)
-                .order_by(User.username))
+                .join(Relationships, on=Relationships.from_user)
+                .where(Relationships.to_user == self)
+                .order_by(Users.username))
 
     def is_following(self, user):
-        return (Relationship
+        return (Relationships
                 .select()
                 .where(
-                    (Relationship.from_user == self) &
-                    (Relationship.to_user == user))
+                    (Relationships.from_user == self) &
+                    (Relationships.to_user == user))
                 .exists())
 
     def gravatar_url(self, size=80):
@@ -171,9 +171,9 @@ class User(BaseModel):
 # model a "many-to-many" relationship between users.  by querying and joining
 # on different columns we can expose who a user is "related to" and who is
 # "related to" a given user
-class Relationship(BaseModel):
-    from_user = ForeignKeyField(User, backref='relationships')
-    to_user = ForeignKeyField(User, backref='related_to')
+class Relationships(BaseModel):
+    from_user = ForeignKeyField(Users, backref='relationships')
+    to_user = ForeignKeyField(Users, backref='related_to')
 
     class Meta:
         indexes = (
@@ -184,43 +184,43 @@ class Relationship(BaseModel):
 
 # a dead simple one-to-many relationship: one user has 0..n messages, exposed by
 # the foreign key.  because we didn't specify, a users messages will be accessible
-# as a special attribute, User.message_set
-class Message(BaseModel):
-    user = ForeignKeyField(User, backref='messages')
+# as a special attribute, Users.message_set
+class Messages(BaseModel):
+    user = ForeignKeyField(Users, backref='messages')
     content = TextField()
     pub_date = DateTimeField(default=datetime.datetime.utcnow)
 
-class State(BaseModel):
+class States(BaseModel):
     key = TextField(null=False)
     value = TextField(null=False)
 
     def upsert(key, value):
-        upsert_helper(State, key, value)
+        upsert_helper(States, key, value)
 
     def get_value(key):
         with database.atomic():
             try:
-                val = State.get(State.key==key).value
-            except State.DoesNotExist:
+                val = States.get(States.key==key).value
+            except States.DoesNotExist:
                 val = None
         return val
     def get_int_value(key):
-        val = State.get_value(key)
+        val = States.get_value(key)
         if val is not None:
             val = int(val)
         return val
     
     def set_image_num(num):
-        State.upsert("image_num", num)
+        States.upsert("image_num", num)
 
     def set_seg_num(num):
-        State.upsert("seg_num", num)
+        States.upsert("seg_num", num)
 
     def get_image_num():
-        return State.get_int_value("image_num")
+        return States.get_int_value("image_num")
 
     def get_seg_num():
-        return State.get_int_value("seg_num")
+        return States.get_int_value("seg_num")
 
 class Settings(BaseModel):
     key = TextField(null=False)
@@ -269,7 +269,7 @@ class Settings(BaseModel):
 # simple utility function to create and seed tables
 def create_tables():
     # Tables need to be listed such that tables referening other tables are at the end
-    tables = [Roles, User, Relationship, Message, Settings, Sessions, State]
+    tables = [Roles, Users, Relationships, Messages, Settings, Sessions, States]
 
     def seed_tables(tables):
         for table in tables:

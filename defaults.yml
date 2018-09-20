@@ -46,8 +46,8 @@ capture_image_path: /home/pi/work/pilapse/media/images
 # Image resolution Set to empty object (`{ }`) to use default resolution.
 capture_resolution:
 ##### 4:3 #####
-#  width: 640
-#  height: 480
+  width: 640
+  height: 480
 #  width: 1024
 #  height: 768
 #  width: 1296
@@ -59,13 +59,13 @@ capture_resolution:
 ##### 16:7 #####
 #  width: 1920
 #  height: 1080
-  width: 2560
-  height: 1440
+#  width: 2560
+#  height: 1440
 
 
 # The interval between captures (in seconds). (float OK)
-#capture_interval: 2
-capture_interval: 20
+capture_interval: 2
+#capture_interval: 20
 
 # Advanced Capture settings 
 
@@ -105,8 +105,8 @@ encoder_video_create: True
 encoder_video_path: /home/pi/work/pilapse/media/videos
 
 # frames per segment
-#encoder_frames_per_segment: 10
-encoder_video_frames_per_segment: 30
+encoder_video_frames_per_segment: 10
+#encoder_video_frames_per_segment: 30
 
 # Output video's frame rate
 encoder_video_frame_rate: 25

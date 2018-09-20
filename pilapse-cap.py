@@ -14,7 +14,7 @@ from pathlib import Path
 import config
 from picamera import PiCamera, PiCameraRuntimeError
 
-from db_model import create_tables, Settings, State, Sessions
+from db_model import create_tables, Settings, States, Sessions
 #######
 # (Life Rate)    x      (Reduction factor)      = (Slowed Rate)
 # (24frames/1s)  x  (1s/10min)  x  (1min/60s)   = (0.04 frame/s)
@@ -198,7 +198,7 @@ def set_camera_options(camera):
 
 def batch_capture(camera, path, batch_size, last_capture_time):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
-    image_num = State.get_image_num()
+    image_num = States.get_image_num()
     cnt = image_num % Settings.get_value('encoder_video_frames_per_segment', type=int)
     
     # Init time markers
@@ -243,7 +243,7 @@ def batch_capture(camera, path, batch_size, last_capture_time):
         last_capture_time = now
         next_capture_time = last_capture_time + interval
         image_num += 1
-        State.set_image_num(image_num)
+        States.set_image_num(image_num)
         cnt+=1
     return last_capture_time
 #
@@ -303,7 +303,7 @@ def capture_loop(image_dir):
     # Create session in db
     Sessions.start_session()
 
-    seg_num = State.get_seg_num()
+    seg_num = States.get_seg_num()
 
     while True:
         try:
@@ -311,7 +311,7 @@ def capture_loop(image_dir):
             seg_str = form_segment_name(seg_num)
             full_path = image_dir + '/' + seg_str
             create_dir(full_path)
-            seg_start_image_num = State.get_image_num()
+            seg_start_image_num = States.get_image_num()
 
             # Capture n images
             segment_size = Settings.get_value('encoder_video_frames_per_segment', type=int)
@@ -328,7 +328,7 @@ def capture_loop(image_dir):
 
             # Increment segment number
             seg_num += 1
-            State.set_seg_num(seg_num)
+            States.set_seg_num(seg_num)
             
         except (AbortCapture):
             restore_power_options(camera)
@@ -664,10 +664,10 @@ if Settings.get_value('encoder_gif_create', type=bool):
 # Determine last image/segment
 ################################
 
-if State.get_image_num() is None:
-    State.set_image_num(0)
-if State.get_seg_num() is None:
-    State.set_seg_num(0)
+if States.get_image_num() is None:
+    States.set_image_num(0)
+if States.get_seg_num() is None:
+    States.set_seg_num(0)
 
 #seg_num  = 0
 #image_num = 0
@@ -708,8 +708,8 @@ create_dir(image_dir)
 # Kick off the capture process.
 
 print("------------------------------------------------------------------------------------")
-print("Start image     : #%d" % State.get_image_num())
-print("Start segment   : #%d" % State.get_seg_num())
+print("Start image     : #%d" % States.get_image_num())
+print("Start segment   : #%d" % States.get_seg_num())
 print("Image directory : %s" % image_dir)
 print("Recording       : %s" %  Settings.get_value('capture_enable', type=bool))
 print("------------------------------------------------------------------------------------")

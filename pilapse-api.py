@@ -43,7 +43,7 @@ def auth_user(user):
 # get the user from the session
 def get_current_user():
     if session.get('logged_in'):
-        return User.get(User.id == session['user_id'])
+        return Users.get(Users.id == session['user_id'])
 
 # Is the user from the session an admin
 def is_admin():
@@ -72,7 +72,7 @@ def login_required(f):
             return redirect(url_for('login'))
         try:
             ret_val = f(*args, **kwargs)
-        except User.DoesNotExist:
+        except Users.DoesNotExist:
             return redirect(url_for('login'))
         return ret_val
     return inner
@@ -141,7 +141,7 @@ def latest_video():
 @app.route('/public/')
 def public_timeline():
     # simply display all messages, newest first
-    messages = Message.select().order_by(Message.pub_date.desc())
+    messages = Messages.select().order_by(Messages.pub_date.desc())
     return object_list('public_messages.html', messages, 'message_list', Settings=Settings)
 
 @app.route('/videos/<path:path>', methods=['GET'])
@@ -161,7 +161,7 @@ def join():
                 # Attempt to create the user. If the username is taken, due to the
                 # unique constraint, the database will raise an IntegrityError.
                 user_role=Roles.get(Roles.name == "user")
-                user = User.create(
+                user = Users.create(
                     username=request.form['username'],
                     password=encode_pw(request.form['password']),
                     email=request.form['email'],
@@ -182,10 +182,10 @@ def login():
     if request.method == 'POST' and request.form['username']:
         try:
             pw_hash = encode_pw(request.form['password'])
-            user = User.get(
-                (User.username == request.form['username']) &
-                (User.password == pw_hash))
-        except User.DoesNotExist:
+            user = Users.get(
+                (Users.username == request.form['username']) &
+                (Users.password == pw_hash))
+        except Users.DoesNotExist:
             flash('The password entered is incorrect')
         else:
             auth_user(user)
@@ -232,7 +232,7 @@ def get_system_stats():
     stats['capture']=capture
     # Current session info
     stats['current_session'] = Sessions.select().where(Sessions.ended_at.is_null()).order_by(Sessions.started_at.desc()).first()
-    stats['image_num'] = State.get_image_num()
+    stats['image_num'] = States.get_image_num()
 
     # Temp Status
     tempc = pi_psutil.get_cpu_temperature()
@@ -308,28 +308,28 @@ def followers():
 
 @app.route('/users/')
 def user_list():
-    users = User.select().order_by(User.username)
+    users = Users.select().order_by(Users.username)
     return object_list('user_list.html', users, 'user_list', Settings=Settings)
 
 @app.route('/users/<username>/')
 def user_detail(username):
     # using the "get_object_or_404" shortcut here to get a user with a valid
     # username or short-circuit and display a 404 if no user exists in the db
-    user = get_object_or_404(User, User.username == username)
+    user = get_object_or_404(Users, Users.username == username)
 
     # get all the users messages ordered newest-first -- note how we're accessing
     # the messages -- user.message_set.  could also have written it as:
-    # Message.select().where(Message.user == user)
-    messages = user.messages.order_by(Message.pub_date.desc())
+    # Messages.select().where(Messages.user == user)
+    messages = user.messages.order_by(Messages.pub_date.desc())
     return object_list('user_detail.html', messages, 'message_list', user=user, Settings=Settings)
 
 @app.route('/users/<username>/follow/', methods=['POST'])
 @login_required
 def user_follow(username):
-    user = get_object_or_404(User, User.username == username)
+    user = get_object_or_404(Users, Users.username == username)
     try:
         with database.atomic():
-            Relationship.create(
+            Relationships.create(
                 from_user=get_current_user(),
                 to_user=user)
     except IntegrityError:
@@ -341,12 +341,12 @@ def user_follow(username):
 @app.route('/users/<username>/unfollow/', methods=['POST'])
 @login_required
 def user_unfollow(username):
-    user = get_object_or_404(User, User.username == username)
-    (Relationship
+    user = get_object_or_404(Users, Users.username == username)
+    (Relationships
      .delete()
      .where(
-         (Relationship.from_user == get_current_user()) &
-         (Relationship.to_user == user))
+         (Relationships.from_user == get_current_user()) &
+         (Relationships.to_user == user))
      .execute())
     flash('You are no longer following %s' % user.username)
     return redirect(url_for('user_detail', username=user.username))
@@ -356,7 +356,7 @@ def user_unfollow(username):
 def post():
     user = get_current_user()
     if request.method == 'POST' and request.form['content']:
-        message = Message.create(
+        message = Messages.create(
             user=user,
             content=request.form['content'],
             pub_date=datetime.datetime.now())
@@ -404,7 +404,7 @@ def _inject_user():
     try:
         user = get_current_user()
         return {'current_user': user }
-    except User.DoesNotExist:
+    except Users.DoesNotExist:
         return {}
 
 # allow running from the command line
