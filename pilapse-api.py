@@ -287,11 +287,9 @@ def admin():
 @admin_required
 def settings():
     if request.method == 'POST':
-        print(request.form)
-        
+        for k,v in request.form.items():
+            Settings.upsert(k,v)
         flash('Updated')
-    else:
-        print(request.form)
 
     return admin()
 
