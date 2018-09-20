@@ -1,1 +1,1 @@
-<p class="message-content">{{ session.description|urlize }}<br>{{ session.started_at|urlize }}</p>
+<p class="session-content">Session #{{ session.id }}: {{ session.description|urlize }}<br><font style="font-size: 70%; italic;">{{ session.local_time_str(session.started_at) }}  -  {{ session.duration(string=True) }} hours ({{ session.num_frames() }} frames)</font></p>

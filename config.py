@@ -2,6 +2,7 @@
 import sys
 import os
 import yaml
+import pytz
 
 class SettingsBase():
     CSS_WIDTH_STR = 'style="width:250px"'
@@ -74,9 +75,15 @@ profiles=['baseline', 'main', 'high', 'high10', 'high422', 'high444']
 presets=['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
 rotations=[0, 90, 180, 270]
 bools=[True, False]
+us_timezones = [ tz for tz in pytz.all_timezones if "US/" in  tz]
 
 # Mappings of Settings Keys to Settings Types
 mapping = {
+# Image Capture Options
+    'general_timezone'    : SettingsList(title="System timezone",
+                                         options=us_timezones),
+    'general_sitename'    : SettingsStr(title="Site name",
+                                        help="Name of site to be displayed within webpage"),
 # Image Capture Options
     'capture_enable'        : SettingsList(title="Enable time-lapse image capture",
                                            options=bools),

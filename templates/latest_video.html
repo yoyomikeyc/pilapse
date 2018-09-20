@@ -2,9 +2,15 @@
 {% block body %}
 <h2>Latest Video</h2>
 <br>
-<table border=0>
-  <tr><td>Capture state: {{ stats.capture|safe }}</td></tr>
-  <tr><td>Last video encoding: {{ stats.update_time }}</td></tr>
+<table border=0 width="100%">
+  <tr style="vertical-align:bottom"><td>Capture state:<br>{{ stats.capture|safe }}</td>
+    {% if stats.current_session %}
+    <td>Session #{{ stats.current_session.id }}: ...<br>{{ stats.current_session.local_time_str(stats.current_session.started_at) }} {{ stats.current_session.duration(string=True) }} hours ({{ stats.current_session.num_frames() }} frames)</td>
+    {% else %}
+    <td></td>
+    {% endif %}
+    <td>Last video encoding:<br>{{ stats.update_time }}</td>
+  </tr>
 </table>
   <video style="display:block; margin: 0 auto;" width="640" height="480" class="center" controls>
     <source src="/videos/timelapse.mp4" type="video/mp4">

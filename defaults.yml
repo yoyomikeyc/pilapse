@@ -27,6 +27,12 @@
 # | Pi0     | v1.3   |  2592x1944 | 5.03M  |   20   |                |          |           |
 # +-----------------------------------------------------------------------------+----------+
 
+# Name of site to be displayed within webpage
+general_sitename: Pilapse - Timelapse Video Server
+
+# The timezone to display all times under.  (times are stored as UTC)
+general_timezone: US/Pacific
+
 #########################
 # Image Capture Options
 #########################

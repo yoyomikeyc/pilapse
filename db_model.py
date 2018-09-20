@@ -4,6 +4,7 @@ from peewee import *
 from pw import encode_pw
 import config
 from hashlib import md5
+import pytz
 
 # config - aside from our database, the rest is for use by Flask
 DATABASE = 'pilapse-sqlite.db'
@@ -24,6 +25,12 @@ class BaseModel(Model):
     # seed function implementations must be idempotent.    
     def seed():
         pass
+
+    def local_time_str(self, t):
+        t = pytz.utc.localize(t)
+        system_tz = Settings.get_value('general_timezone')
+        t = t.astimezone(pytz.timezone(system_tz))
+        return t.strftime("%Y-%m-%d, %H:%M:%S %Z")
         
 class Roles(BaseModel):
     name = TextField()
@@ -34,20 +41,44 @@ class Roles(BaseModel):
 
 class Sessions(BaseModel):
     description = TextField(null=True)
-    started_at = DateTimeField(null=False, default=datetime.datetime.now)
+    started_at = DateTimeField(null=False, default=datetime.datetime.utcnow)
     ended_at   = DateTimeField(null=True)
     image_start = IntegerField(unique=True, null=False, constraints=[Check('image_start >= 0')])
-    image_end   = IntegerField(unique=True, null=True,  constraints=[Check('image_end >= 0')])
+    image_end   = IntegerField(unique=True, null=True,  constraints=[Check('image_end >= -1')])
 
+    def num_frames(self):
+        """Returns the number of frames in this session.  If the session is not complete, the number of frames so far is used."""
+        image_end = self.image_end 
+        if image_end is None:
+            image_end = State.get_image_num()
+        # image_start / image_end are inclusive.
+        return (image_end - self.image_start) + 1
+    
+    def duration(self, string=False):
+        """Return the duration of the session as a number of hours. If the session is not complete (ended_at is NULL), now() is used instead. Returns a float, unless string==True"""
+        ended_at = self.ended_at 
+        if ended_at is None:
+            ended_at = datetime.datetime.utcnow()
+        delta = ended_at - self.started_at
+        hours = delta.seconds / (60.0 * 60.0)
+        if string:
+            return "%2.1f" % hours
+        return hours
+    
     def end_session(description):
         try:
             with database.atomic():
                 try:
                     session = Sessions.get(Sessions.ended_at.is_null())
                     image_num = State.get_image_num()
-                    session.ended_at = datetime.datetime.now()
+                    # If the image number hasnt been incremented, then this session contains no images.
+                    if session.image_start == image_num:
+                        session.delete_instance()
+                        return
+                    session.ended_at = datetime.datetime.utcnow()
                     session.description = description
-                    session.image_end = image_num
+                    # image_start / image_end are inclusive.
+                    session.image_end = image_num - 1
                     session.save()
                 except Sessions.DoesNotExist:
                     pass
@@ -55,14 +86,14 @@ class Sessions(BaseModel):
             pass
     def start_session():
         image_num = State.get_image_num()
-        session, created = Sessions.get_or_create(image_start=image_num, defaults={'image_end' : None, 'started_at':datetime.datetime.now(), 'ended_at':None, 'description':None})
+        session, created = Sessions.get_or_create(image_start=image_num, defaults={'image_end' : None, 'started_at':datetime.datetime.utcnow(), 'ended_at':None, 'description':None})
         
 # the user model specifies its fields (or columns) declaratively, like django
 class User(BaseModel):
     username = CharField(unique=True, null=False)
     password = CharField(null=False)
     email = CharField(null=False, unique=True)
-    join_date = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+    join_date = DateTimeField(default=datetime.datetime.utcnow)
     role = ForeignKeyField(Roles)
     
     def seed():
@@ -76,7 +107,7 @@ class User(BaseModel):
             defaults={
                 'password': encode_pw(yaml_config['admin_password']),
                 'email' : yaml_config['admin_email'],
-                'join_date' : datetime.datetime.now(),
+                'join_date' : datetime.datetime.now(pytz.UTC),
                 'role' : admin_role
             }
         )
@@ -138,7 +169,7 @@ class Relationship(BaseModel):
 class Message(BaseModel):
     user = ForeignKeyField(User, backref='messages')
     content = TextField()
-    pub_date = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
+    pub_date = DateTimeField(default=datetime.datetime.utcnow)
 
 class State(BaseModel):
     key = TextField(null=False)

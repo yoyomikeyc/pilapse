@@ -133,14 +133,17 @@ def latest_video():
     # user is following.  these messages are then ordered newest-first.
     user = get_current_user()
     sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
+
+    #sessions = [ {'description' : s.description, 'started_at' : convert_utc_to_system_tz(pytz.UTC.localize(s.started_at)).strftime("%Y-%m-%d, %H:%M:%S %Z")} for s in sessions]
+
     stats = get_system_stats()
-    return object_list('latest_video.html', sessions, 'session_list', stats=stats)
+    return object_list('latest_video.html', sessions, 'session_list', stats=stats, Settings=Settings)
 
 @app.route('/public/')
 def public_timeline():
     # simply display all messages, newest first
     messages = Message.select().order_by(Message.pub_date.desc())
-    return object_list('public_messages.html', messages, 'message_list')
+    return object_list('public_messages.html', messages, 'message_list', Settings=Settings)
 
 @app.route('/videos/<path:path>', methods=['GET'])
 def videos(path):
@@ -173,7 +176,7 @@ def join():
         except IntegrityError:
             flash('That username is already taken')
 
-    return render_template('join.html')
+    return render_template('join.html', Settings=Settings)
 
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
@@ -189,7 +192,7 @@ def login():
             auth_user(user)
             return redirect(url_for('homepage'))
 
-    return render_template('login.html')
+    return render_template('login.html', Settings=Settings)
 
 @app.route('/logout/')
 def logout():
@@ -199,7 +202,7 @@ def logout():
 
 @app.route('/about/')
 def about():
-    return render_template('about.html')
+    return render_template('about.html', Settings=Settings)
 
 def get_system_stats():
     stats={}
@@ -209,7 +212,8 @@ def get_system_stats():
     try:
         update_time = os.path.getmtime(video_path)
         update_time =  pytz.utc.localize(datetime.datetime.utcfromtimestamp(update_time))
-        update_time = update_time.astimezone(timezone('US/Pacific'))
+        system_tz = Settings.get_value('general_timezone')
+        update_time = update_time.astimezone(timezone(system_tz))
         update_time_str = update_time.strftime("%Y-%m-%d, %H:%M:%S %Z")
     except FileNotFoundError:
         update_time_str = "None"
@@ -222,6 +226,9 @@ def get_system_stats():
     else:
         capture='<font size="4" color="black">Stopped</font>'
     stats['capture']=capture
+    # Current session info
+    stats['current_session'] = Sessions.select().where(Sessions.ended_at.is_null()).order_by(Sessions.started_at.desc()).first()
+    stats['image_num'] = State.get_image_num()
 
     # Temp Status
     tempc = pi_psutil.get_cpu_temperature()
@@ -269,7 +276,7 @@ def admin():
     settings = Settings.select().order_by(Settings.key)
     forms = [ {'key': s.key, 'title': config.get_title(s.key), 'help': config.get_help(s.key), 'form': config.get_form_html(s.key, s.value) } for s in settings]
     # render page
-    return render_template('admin.html', stats=get_system_stats(), setting_forms=forms)
+    return render_template('admin.html', stats=get_system_stats(), setting_forms=forms, Settings=Settings)
 
 @app.route('/settings/', methods=['GET', 'POST'])
 @login_required
@@ -289,18 +296,18 @@ def settings():
 @login_required
 def following():
     user = get_current_user()
-    return object_list('user_following.html', user.following(), 'user_list')
+    return object_list('user_following.html', user.following(), 'user_list', Settings=Settings)
 
 @app.route('/followers/')
 @login_required
 def followers():
     user = get_current_user()
-    return object_list('user_followers.html', user.followers(), 'user_list')
+    return object_list('user_followers.html', user.followers(), 'user_list', Settings=Settings)
 
 @app.route('/users/')
 def user_list():
     users = User.select().order_by(User.username)
-    return object_list('user_list.html', users, 'user_list')
+    return object_list('user_list.html', users, 'user_list', Settings=Settings)
 
 @app.route('/users/<username>/')
 def user_detail(username):
@@ -312,7 +319,7 @@ def user_detail(username):
     # the messages -- user.message_set.  could also have written it as:
     # Message.select().where(Message.user == user)
     messages = user.messages.order_by(Message.pub_date.desc())
-    return object_list('user_detail.html', messages, 'message_list', user=user)
+    return object_list('user_detail.html', messages, 'message_list', user=user, Settings=Settings)
 
 @app.route('/users/<username>/follow/', methods=['POST'])
 @login_required
@@ -354,7 +361,7 @@ def post():
         flash('Your message has been created')
         return redirect(url_for('user_detail', username=user.username))
 
-    return render_template('post.html')
+    return render_template('post.html', Settings=Settings)
 
 
 @app.route('/startCapture', methods=['POST'])
