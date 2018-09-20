@@ -45,7 +45,7 @@ class Sessions(BaseModel):
     ended_at   = DateTimeField(null=True)
     image_start = IntegerField(unique=True, null=False, constraints=[Check('image_start >= 0')])
     image_end   = IntegerField(unique=True, null=True,  constraints=[Check('image_end >= -1')])
-
+    
     def num_frames(self):
         """Returns the number of frames in this session.  If the session is not complete, the number of frames so far is used."""
         image_end = self.image_end 
@@ -53,6 +53,19 @@ class Sessions(BaseModel):
             image_end = State.get_image_num()
         # image_start / image_end are inclusive.
         return (image_end - self.image_start) + 1
+
+    def offset(self, string=False):
+        """Returns a float representing the offset of session (in seconds) from start of video given current framerate"""
+        frame_rate =  float(Settings.get_value('encoder_video_frame_rate'))
+        seconds = self.image_start * (1.0 / frame_rate)
+        if string:
+            hours = int(seconds / 3600)
+            seconds -= (hours * 3600)
+            minutes = int(seconds / 60)
+            seconds -= (minutes * 60)
+            seconds = int(seconds)
+            return "%02d:%02d:%02d" % (hours, minutes, seconds)
+        return seconds
     
     def duration(self, string=False):
         """Return the duration of the session as a number of hours. If the session is not complete (ended_at is NULL), now() is used instead. Returns a float, unless string==True"""
@@ -86,7 +99,13 @@ class Sessions(BaseModel):
             pass
     def start_session():
         image_num = State.get_image_num()
-        session, created = Sessions.get_or_create(image_start=image_num, defaults={'image_end' : None, 'started_at':datetime.datetime.utcnow(), 'ended_at':None, 'description':None})
+        session, created = \
+            Sessions.get_or_create(image_start=image_num, defaults={ \
+                                                                     'image_end' : None,
+                                                                     'started_at':datetime.datetime.utcnow(),
+                                                                     'ended_at':None,
+                                                                     'description':None, }
+            )
         
 # the user model specifies its fields (or columns) declaratively, like django
 class User(BaseModel):

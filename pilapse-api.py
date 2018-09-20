@@ -132,10 +132,11 @@ def latest_video():
     # messages where the person who created the message is someone the current
     # user is following.  these messages are then ordered newest-first.
     user = get_current_user()
-    sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
+    #sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
+    sessions = Sessions.select().where(Sessions.ended_at.is_null(False))
 
     stats = get_system_stats()
-    return object_list('latest_video.html', sessions, 'session_list', stats=stats, Settings=Settings)
+    return object_list('latest_video.html', sessions, 'session_list', stats=stats, Settings=Settings, Sessions=Sessions)
 
 @app.route('/public/')
 def public_timeline():

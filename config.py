@@ -89,6 +89,7 @@ mapping = {
                                            options=bools),
     'capture_image_path'    : SettingsStr(title="Path to store raw images"),
     'capture_resolution'    : SettingsStr(title="Image capture resolution"),
+    #TODO: Shouldnt be an int, but a float
     'capture_interval'      : SettingsInt(title="Time between image captures",
                                           min=0),
     'capture_iso'           : SettingsInt(title="Camera ISO setting",
@@ -113,7 +114,8 @@ mapping = {
     'encoder_video_frames_per_segment'    : SettingsInt(title="Number of frames in encoding segment",
                                                         min=1),
     'encoder_video_frame_rate'      : SettingsInt(title="Frame rate of video<br>(real-time video)",
-                                                  min=1),
+                                                  min=1,
+                                                  help="frames per second of final video.  If changed after some video has been created, the session offsets will be inaccurate until the entire video is regenerated."),
     'encoder_video_profile'         : SettingsList(title="ffmpeg encoding profile<br>(real-time video)",
                                                    help='Used to specify the H.264 profile.  Options: baseline, main, high, high10, high422, high444.  See <a href="https://trac.ffmpeg.org/wiki/Encode/H.264">https://trac.ffmpeg.org/wiki/Encode/H.264</a> for more information',
                                                    options=profiles),
