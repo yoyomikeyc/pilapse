@@ -13,7 +13,7 @@ from functools import wraps
 import config
 
 from pw import encode_pw
-from db_model import create_tables, Roles, Users, Relationships, Messages, Settings, Sessions, States #,KeyValuePairTypes
+from db_model import database, create_tables, Roles, Users, Relationships, Messages, Settings, Sessions, States #,KeyValuePairTypes
 
 import psutil
 import pi_psutil
@@ -276,8 +276,9 @@ def admin():
 def settings():
     if request.method == 'POST':
         for k,v in request.form.items():
-            Settings.upsert_kvp(k,v)
+            Settings.update_kvp(k,v)
         update_flask_settings()
+        States.update_kvp('reinit', True)
         flash('Updated')
 
     return admin()
@@ -359,7 +360,7 @@ def post():
 @login_required
 @admin_required
 def startCapture():
-    Settings.upsert_kvp('capture_enable', True)
+    Settings.update_kvp('capture_enable', True)
     flash('Capture started.')
     return redirect(url_for('admin'))
 
@@ -367,7 +368,7 @@ def startCapture():
 @login_required
 @admin_required
 def stopCapture():
-    Settings.upsert_kvp('capture_enable', False)
+    Settings.update_kvp('capture_enable', False)
     flash('Capture stopped.')
 
     Sessions.end_session(description=request.form['session_description'])

@@ -101,6 +101,22 @@ class KeyValuePair(BaseModel):
             pass
 
     @classmethod
+    def update_kvp(cls, key, value):
+        """generic update function"""
+        try:
+            with database.atomic():
+                try:
+                    obj = cls.get(cls.key==key)
+                except cls.DoesNotExist:
+                    print("%s not found!" % key)
+                    return
+                obj.value = value
+                obj.save()
+        except IntegrityError:
+            pass
+
+        
+    @classmethod
     def insert_kvp(cls, key, value, as_type=str):
         """insert (key, value) pair into settings table if key not present.
         Returns true if actually created."""
@@ -308,17 +324,16 @@ class States(KeyValuePair):
         States.upsert_kvp("image_num", num, as_type=int)
 
     @staticmethod
-    def set_seg_num(num):
-        States.upsert_kvp("seg_num", num, as_type=int)
-
-    @staticmethod
     def get_image_num():
         return States.get_value_by_key("image_num")
 
     @staticmethod
-    def get_seg_num():
-        return States.get_value_by_key("seg_num")
-
+    def seed():
+        # Todo just make a set_image_num, but chnage from upsert to insert
+        if States.get_image_num() is None:
+            States.set_image_num(0)
+        States.upsert_kvp('reinit', True, as_type=bool)
+        
 class Settings(KeyValuePair):
     """Settings object for storing system settings"""
 
