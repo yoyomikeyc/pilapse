@@ -9,7 +9,7 @@ RM=\rm -rf
 PIP=pip3
 PYTHON=python3
 
-PYLINT_ARGS= --disable=undefined-variable
+PYLINT_ARGS= --disable=C,R,no-member
 #--errors-only 
 PYLINT=pylint $(PYLINT_ARGS)
 

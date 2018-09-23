@@ -33,6 +33,15 @@ general_sitename: Pilapse - Timelapse Video Server
 # The timezone to display all times under.  (times are stored as UTC)
 general_timezone: US/Pacific
 
+#####################
+# Webserver Settings
+#####################
+
+# In debug mode, an interactive debugger will be shown for unhandled exceptions, and the server will
+# be reloaded when code changes. Debug mode consumes a reasonable fraction of CPU.  For security reasons,
+# do not enable debug mode when deploying in production.
+webserver_debug: False
+
 #########################
 # Image Capture Options
 #########################

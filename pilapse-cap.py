@@ -11,7 +11,6 @@ import glob
 import re
 from pathlib import Path
 
-import config
 from picamera import PiCamera, PiCameraRuntimeError
 
 from db_model import create_tables, Settings, States, Sessions
@@ -84,9 +83,9 @@ def save_statedb():
 ##################################################################################
 
 
-def create_dir(dir):
+def create_dir(directory):
     try:
-        os.makedirs(dir)
+        os.makedirs(directory)
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
@@ -98,13 +97,13 @@ def file_exists(fn):
 
 def disable_power_options(camera):
     # disable hdmi
-    if Settings.get_value('power_disable_hdmi', type=bool):
+    if Settings.get_value_by_key('power_disable_hdmi'):
         cmd = "/usr/bin/tvservice -o"
         run_cmd(cmd)
         
     # Disabling LEDs can save about 5mA per LED
     # https://www.jeffgeerling.com/blogs/jeff-geerling/raspberry-pi-zero-conserve-energy
-    if Settings.get_value('power_disable_pi_leds', type=bool):
+    if Settings.get_value_by_key('power_disable_pi_leds'):
         # PiZero Only
         # https://www.jeffgeerling.com/blogs/jeff-geerling/controlling-pwr-act-leds-raspberry-pi
 
@@ -120,7 +119,7 @@ def disable_power_options(camera):
         cmd="echo 'Pi Zero ACT LED turned off.'"
         run_cmd(cmd)
 
-    if Settings.get_value('power_disable_camera_led', type=bool):        
+    if Settings.get_value_by_key('power_disable_camera_led'):
         # Turn the camera's LED off
         camera.led = False
         cmd = "echo 'Camera LED disabled.'"
@@ -129,13 +128,13 @@ def disable_power_options(camera):
 def restore_power_options(camera):
     
     # enable hdmi
-    if Settings.get_value('power_disable_hdmi', type=bool):
+    if Settings.get_value_by_key('power_disable_hdmi'):
         cmd = "/usr/bin/tvservice -p"
         run_cmd(cmd)
         
     # Disabling LEDs can save about 5mA per LED
     # https://www.jeffgeerling.com/blogs/jeff-geerling/raspberry-pi-zero-conserve-energy
-    if Settings.get_value('power_disable_pi_leds', type=bool):
+    if Settings.get_value_by_key('power_disable_pi_leds'):
         # PiZero Only
         # Set the Pi Zero ACT LED trigger to 'none'.
         #cmd1 = "echo none | sudo tee /sys/class/leds/led0/trigger"
@@ -149,7 +148,7 @@ def restore_power_options(camera):
         cmd = "echo 'Pi Zero ACT LED turned on.'"
         run_cmd(cmd)
 
-    if Settings.get_value('power_disable_camera_led', type=bool):        
+    if Settings.get_value_by_key('power_disable_camera_led'):
         # Turn the camera's LED on
         camera.led = True
         cmd = "echo 'Camera LED enabled.'"
@@ -159,7 +158,7 @@ def restore_power_options(camera):
 
 def set_camera_options(camera):
     # Set camera resolution.
-    resolution = Settings.get_value('capture_resolution', type=dict)
+    resolution = Settings.get_value_by_key('capture_resolution')
     if resolution:
         camera.resolution = (
             resolution['width'],
@@ -167,12 +166,12 @@ def set_camera_options(camera):
         )
 
     # Set ISO.
-    iso =  Settings.get_value('capture_iso', type=int)
+    iso =  Settings.get_value_by_key('capture_iso')
     if iso:
         camera.iso = iso
 
     # Set shutter speed.
-    shutter_speed = Settings.get_value('capture_shutter_speed', type=int)
+    shutter_speed = Settings.get_value_by_key('capture_shutter_speed')
     if shutter_speed:
         camera.shutter_speed = shutter_speed
         # Sleep to allow the shutter speed to take effect correctly.
@@ -180,7 +179,7 @@ def set_camera_options(camera):
         camera.exposure_mode = 'off'
 
     # Set white balance.
-    white_balance =  Settings.get_value('capture_white_balance', type=dict)
+    white_balance =  Settings.get_value_by_key('capture_white_balance')
     if white_balance:
         camera.awb_mode = 'off'
         camera.awb_gains = (
@@ -189,7 +188,7 @@ def set_camera_options(camera):
         )
 
     # Set camera rotation
-    rotation = Settings.get_value('capture_rotation', type=int)
+    rotation = Settings.get_value_by_key('capture_rotation')
     if rotation:
         camera.rotation = rotation
 
@@ -199,17 +198,17 @@ def set_camera_options(camera):
 def batch_capture(camera, path, batch_size, last_capture_time):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
     image_num = States.get_image_num()
-    cnt = image_num % Settings.get_value('encoder_video_frames_per_segment', type=int)
+    cnt = image_num % Settings.get_value_by_key('encoder_video_frames_per_segment')
     
     # Init time markers
-    interval = timedelta(seconds=Settings.get_value('capture_interval', type=float))
+    interval = timedelta(seconds=Settings.get_value_by_key('capture_interval'))
     if last_capture_time is None:
         last_capture_time = datetime.now()
     next_capture_time = last_capture_time + interval
 
     # Capture images
     while cnt < batch_size:
-        if not Settings.get_value('capture_enable', type=bool):
+        if not Settings.get_value_by_key('capture_enable'):
             raise AbortCapture
                 
         now = datetime.now()
@@ -232,11 +231,11 @@ def batch_capture(camera, path, batch_size, last_capture_time):
             continue
 
         # backup image to server if specified
-        if Settings.get_value('backup_enable', type=bool):
+        if Settings.get_value_by_key('backup_enable'):
             backup_image(image_abs_fn)
                 
         # delete any old image(s)
-        if Settings.get_value('backup_enable_image_cleanup', type=bool):
+        if Settings.get_value_by_key('backup_enable_image_cleanup'):
             delete_old_images(image_num)
 
         # Book keeping
@@ -249,15 +248,15 @@ def batch_capture(camera, path, batch_size, last_capture_time):
 #
 
 def gen_final_video():
-    concat_fn= '%s/filelist-%s.txt' % (Settings.get_value('capture_video_path'), datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-    all_images =  get_all_images(Settings.get_value('capture_image_path'), descending=False)
+    concat_fn= '%s/filelist-%s.txt' % (Settings.get_value_by_key('capture_video_path'), datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    all_images =  get_all_images(Settings.get_value_by_key('capture_image_path'), descending=False)
     with open(concat_fn, 'w') as f:
         for i in all_images:
             f.write("file '%s'\n" % i)
     input_fns = "-f concat -safe 0 -i %s" % (concat_fn)
-    output_fn = "%s/%s.mp4" % (Settings.get_value('capture_image_path'), "final")
-    hq_profile = Settings.get_value('encoder_hq_video_profile')
-    hq_preset = Settings.get_value('encoder_hq_video_preset')
+    output_fn = "%s/%s.mp4" % (Settings.get_value_by_key('capture_image_path'), "final")
+    hq_profile = Settings.get_value_by_key('encoder_hq_video_profile')
+    hq_preset = Settings.get_value_by_key('encoder_hq_video_preset')
     success = True
     success &= create_video(input_fns, output_fn, None, frame_rate=None, profile=hq_profile, preset=hq_preset)
 
@@ -265,12 +264,12 @@ def gen_final_video():
 def video_worker(seg_num, image_num):
     try:
         input_fns = "-i %s/%s/img%%07d.jpg" % (image_dir, form_segment_name(seg_num))
-        output_fn = "%s/%s.mp4" % (Settings.get_value('encoder_video_path'), form_segment_name(seg_num))
+        output_fn = "%s/%s.mp4" % (Settings.get_value_by_key('encoder_video_path'), form_segment_name(seg_num))
     
         success = True
-        frame_rate = Settings.get_value('encoder_video_frame_rate', type=int)
-        profile = Settings.get_value('encoder_video_profile')
-        preset = Settings.get_value('encoder_video_preset')
+        frame_rate = Settings.get_value_by_key('encoder_video_frame_rate')
+        profile = Settings.get_value_by_key('encoder_video_profile')
+        preset = Settings.get_value_by_key('encoder_video_preset')
         success &= create_video(input_fns, output_fn, image_num, frame_rate=frame_rate, profile=profile, preset=preset)
         if success:
             success &= append_video_segment(seg_num)
@@ -278,7 +277,7 @@ def video_worker(seg_num, image_num):
             if success:
                 video_cleanup(seg_num)
                 return
-    except (KeyboardInterrupt, SystemExit) as e:
+    except (KeyboardInterrupt, SystemExit):
         terminate(1)
 
 def gif_worker(seg_num, image_num):
@@ -287,7 +286,7 @@ def gif_worker(seg_num, image_num):
         success &= create_gif_segment(seg_num, image_num)
         if success:
             return
-    except (KeyboardInterrupt, SystemExit) as e:
+    except (KeyboardInterrupt, SystemExit):
         terminate(1)
         
 def capture_loop(image_dir):
@@ -314,17 +313,17 @@ def capture_loop(image_dir):
             seg_start_image_num = States.get_image_num()
 
             # Capture n images
-            segment_size = Settings.get_value('encoder_video_frames_per_segment', type=int)
+            segment_size = Settings.get_value_by_key('encoder_video_frames_per_segment')
             last_capture_time = batch_capture(camera, full_path, segment_size, last_capture_time) 
 
-            if Settings.get_value('encoder_gif_create', type=bool):
+            if Settings.get_value_by_key('encoder_gif_create'):
                 # Start thread to run concurrently
-                t = threading.Thread(target=gif_worker, args=(seg_num, seg_start_image_num)).start()
+                threading.Thread(target=gif_worker, args=(seg_num, seg_start_image_num)).start()
 
             # Create video segment and append to prior segments.
-            if Settings.get_value('encoder_video_create', type=bool):
+            if Settings.get_value_by_key('encoder_video_create'):
                 # Start thread to run concurrently
-                t = threading.Thread(target=video_worker, args=(seg_num, seg_start_image_num)).start()
+                threading.Thread(target=video_worker, args=(seg_num, seg_start_image_num)).start()
 
             # Increment segment number
             seg_num += 1
@@ -348,15 +347,15 @@ def delete_old_images(curr_image_num):
         # For an image to be "old" and no longer needed we need to possibly consider:
         # 1) its index is greater than a batch size away and thus it has already been added to a segment video.
         # 2) It is not contained in the list of files still to be backed up
-        segment_size = Settings.get_value('encoder_video_frames_per_segment', type=int)
+        segment_size = Settings.get_value_by_key('encoder_video_frames_per_segment')
         old_enough = image_num < (curr_image_num - 2*segment_size)
         backed_up = file not in statedb['to_backup']
         ok_to_delete = True
-        if Settings.get_value('backup_enable', type=bool):
+        if Settings.get_value_by_key('backup_enable'):
             ok_to_delete = ok_to_delete and backed_up
-        create_video = Settings.get_value('encoder_video_create', type=bool)
-        create_gif = Settings.get_value('encoder_gif_create', type=bool)
-        need_full_segment = create_video or create_gif
+        video_create = Settings.get_value_by_key('encoder_video_create')
+        create_gif = Settings.get_value_by_key('encoder_gif_create')
+        need_full_segment = video_create or create_gif
         if need_full_segment:
             ok_to_delete = ok_to_delete and old_enough
         if ok_to_delete:
@@ -379,11 +378,11 @@ def backup_image(fn):
     # Generate file to backup and store to list of pending files to backup.
     statedb['to_backup'].append(fn)
     # Determine if we have enough files to make it worth backing up.
-    if len(statedb['to_backup']) <  Settings.get_value('backup_size', type=int):
+    if len(statedb['to_backup']) <  Settings.get_value_by_key('backup_size'):
         return True
     
     # hostname destination
-    server_details = Settings.get_value('backup_server', type=dict)
+    server_details = Settings.get_value_by_key('backup_server')
 
     ssh = SSHClient()
     ssh.load_system_host_keys()
@@ -395,13 +394,13 @@ def backup_image(fn):
     # backup all files 
     overall_success = True
     new_backup_list = []
-    for file in statedb['to_backup']:
+    for filename in statedb['to_backup']:
         #cmd = "scp %s %s" % (file, dest)
         # make this run command silent so that in cases whhen the server is down we dont spam the log indefinitely
         #success = run_cmd(cmd, silent=(not overall_success))
         try:
             success=True
-            scp.put(file, remote_path=server_details['image_path'])
+            scp.put(filename, remote_path=server_details['image_path'])
         except FileNotFoundError:
             print("Error, file '%s' not found and thus enable to delete." % file)
             # Set as successful so we dont keep trying to delete a file that isnt there.
@@ -414,10 +413,10 @@ def backup_image(fn):
             # denote file as successfully backed up
             #statedb['to_backup'].remove(file)
             # Denote that image should be removed
-            if Settings.get_value('backup_enable_image_cleanup', type=bool):
-                statedb['to_delete'].append(file)
+            if Settings.get_value_by_key('backup_enable_image_cleanup'):
+                statedb['to_delete'].append(filename)
         else:
-            new_backup_list.append(file)
+            new_backup_list.append(filename)
         overall_success &= success
         statedb['to_backup']=new_backup_list
     scp.close()
@@ -531,7 +530,7 @@ def form_segment_name(seg_num):
 
 def extract_from_abs_fn(abs_fn):
     """Returns tuple containing seg_num and image_num extracted from image filename"""
-    m = re.match(".*/seg(\d{7})/img(\d{7})\.jpg$", abs_fn)
+    m = re.match(r'.*/seg(\d{7})/img(\d{7})\.jpg$', abs_fn)
     if m:
         seg_num = int(m.group(1)) 
         image_num = int(m.group(2))
@@ -551,7 +550,7 @@ def create_video_segment(seg_num, start_img):
     #print("Creating video segment")
     seg_str = form_segment_name(seg_num)
     fn = '%s.mp4' % seg_str
-    frame_rate = Settings.get_value('encoder_video_frame_rate', type=int)
+    frame_rate = Settings.get_value_by_key('encoder_video_frame_rate')
     # Helpful Link:
     #
     # https://trac.ffmpeg.org/wiki/Encode/H.264#Listpresetsandtunes
@@ -559,7 +558,7 @@ def create_video_segment(seg_num, start_img):
     # Use HW encoding with the h264_omx codec: -c:v h264_omx
     # Use Baseline profile to omit B frames and reduce cpu usage.   -profile:v baseline
     cmd = 'avconv -y -framerate %s -start_number %s -i %s/%s/img%%07d.jpg -profile:v %s  -preset %s -vf format=yuv420p %s/%s' % \
-          (str(frame_rate), str(start_img), image_dir, seg_str, Settings.get_value('encoder_video_profile'), Settings.get_value('encoder_video_preset'), Settings.get_value('encoder_video_path'), fn)
+          (str(frame_rate), str(start_img), image_dir, seg_str, Settings.get_value_by_key('encoder_video_profile'), Settings.get_value_by_key('encoder_video_preset'), Settings.get_value_by_key('encoder_video_path'), fn)
     #cmd = 'avconv -y -framerate %s -start_number %s -i %s/%s/img%%07d.jpg  -c:v h264_omx -vf format=yuv420p %s/%s' % \
     #      (str(frame_rate), str(start_img), image_dir, seg_str, config['video_path'], fn)
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")
@@ -570,19 +569,19 @@ def create_gif_segment(seg_num, start_img):
     #    print('\nCreating animated gif.\n')
     seg_str = form_segment_name(seg_num)
     fn = '%s.gif' % seg_str
-    cmd = 'convert -delay 10 -loop 0 %s/%s/img*.jpg %s/%s' % (image_dir, seg_str,Settings.get_value('encoder_gif_path'), fn)                
+    cmd = 'convert -delay 10 -loop 0 %s/%s/img*.jpg %s/%s' % (image_dir, seg_str,Settings.get_value_by_key('encoder_gif_path'), fn)                
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")             
 
     
 def append_video_segment(seg_num):
-    video_path = Settings.get_value('encoder_video_path')
+    video_path = Settings.get_value_by_key('encoder_video_path')
     #print("Appending segment")
     # Form absolute path for segment file
     seg_str = form_segment_name(seg_num)
     new_seg_fn = '%s.mp4' % seg_str
     abs_new_seg_fn = video_path+'/'+new_seg_fn
     # Form absolute path for input video  
-    ivideo_fn = Settings.get_value('encoder_video_output_filename')
+    ivideo_fn = Settings.get_value_by_key('encoder_video_output_filename')
     abs_ivideo_fn = video_path+'/'+ivideo_fn
     # Form absolute path for output video
     ovideo_fn = 'tmp.mp4'
@@ -606,8 +605,8 @@ def append_video_segment(seg_num):
     # If timelapse mpeg exists, rename as a backup
     timelapse_mpeg = Path(abs_ivideo_fn)
     if timelapse_mpeg.is_file():
-         cmd = 'mv -f %s %s' % (abs_ivideo_fn, abs_ivideo_fn+".backup")
-         success = run_cmd(cmd)
+        cmd = 'mv -f %s %s' % (abs_ivideo_fn, abs_ivideo_fn+".backup")
+        success = run_cmd(cmd)
     # Rename tmp as new full timelapse mpeg
     # If tmp doesnt exist, its possible the encoding failed or the user aborted 
     if file_exists(abs_ovideo_fn):
@@ -625,7 +624,7 @@ def video_cleanup(seg_num):
     seg_to_delete = seg_num - SEGMENT_DELETION_DELAY
     seg_str = form_segment_name(seg_num)
     old_seg_fn = '%s.mp4' % seg_str
-    abs_old_seg_fn = Settings.get_value('encoder_video_path')+'/' + old_seg_fn
+    abs_old_seg_fn = Settings.get_value_by_key('encoder_video_path')+'/' + old_seg_fn
     success = False
     if seg_to_delete > 0:
         cmd = 'rm -f %s' % (abs_old_seg_fn)
@@ -639,8 +638,7 @@ def video_cleanup(seg_num):
 ######################
 
 # Log that process was started
-cmd = 'echo Timelapse capture process started' 
-run_cmd(cmd)
+run_cmd('echo Timelapse capture process started' )
 
 
 load_statedb()
@@ -651,13 +649,13 @@ create_tables()
 ###################
             
 # Create directory based on current timestamp.
-create_dir(Settings.get_value('capture_image_path'))
+create_dir(Settings.get_value_by_key('capture_image_path'))
 
-if Settings.get_value('encoder_video_create', type=bool):
-    create_dir(Settings.get_value('encoder_video_path'))
+if Settings.get_value_by_key('encoder_video_create'):
+    create_dir(Settings.get_value_by_key('encoder_video_path'))
 
-if Settings.get_value('encoder_gif_create', type=bool):
-    create_dir(Settings.get_value('encoder_gif_path'))
+if Settings.get_value_by_key('encoder_gif_create'):
+    create_dir(Settings.get_value_by_key('encoder_gif_path'))
     
 
 ###############################
@@ -673,7 +671,7 @@ if States.get_seg_num() is None:
 #image_num = 0
 
 # Get descending sorted list of all images in images folder
-#all_images =  get_all_images(Settings.get_value('capture_image_path'))
+#all_images =  get_all_images(Settings.get_value_by_key('capture_image_path'))
                             
 # Extract next image number and next segment number
 #if all_images:
@@ -694,7 +692,7 @@ if States.get_seg_num() is None:
 # Append subdir to image path and create
 series_name = 'series-' + datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 image_dir = os.path.join(
-    Settings.get_value('capture_image_path'),
+    Settings.get_value_by_key('capture_image_path'),
     series_name
 )
 create_dir(image_dir)
@@ -711,7 +709,7 @@ print("-------------------------------------------------------------------------
 print("Start image     : #%d" % States.get_image_num())
 print("Start segment   : #%d" % States.get_seg_num())
 print("Image directory : %s" % image_dir)
-print("Recording       : %s" %  Settings.get_value('capture_enable', type=bool))
+print("Recording       : %s" %  Settings.get_value_by_key('capture_enable'))
 print("------------------------------------------------------------------------------------")
 print("\n")
 
@@ -721,7 +719,7 @@ print("\n")
 
 try:
     while True:
-        if Settings.get_value('capture_enable', type=bool):
+        if Settings.get_value_by_key('capture_enable'):
             capture_loop(image_dir)
         sleep(POLL_PERIOD)
 except (KeyboardInterrupt, SystemExit):

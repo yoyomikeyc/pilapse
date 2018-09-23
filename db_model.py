@@ -1,14 +1,15 @@
+"""Database object model"""
+from hashlib import md5
 import ast
 import datetime
 from peewee import *
 from pw import encode_pw
 import config
-from hashlib import md5
 import pytz
+import os
 
 # config - aside from our database, the rest is for use by Flask
 DATABASE = 'pilapse-sqlite.db'
-SECRET_KEY = 'hin6bab8ge25*r=x&amp;+5$0kn=-#log$pt^#@vrqjld!^2ci@g*b'
 
 # create a peewee database instance -- our models will use this database to
 # persist information
@@ -19,44 +20,139 @@ database = SqliteDatabase(DATABASE)
 # use the correct storage. for more information, see:
 # http://charlesleifer.com/docs/peewee/peewee/models.html#model-api-smells-like-django
 class BaseModel(Model):
+    """Base object model for all other db objects"""
     class Meta:
         database = database
-        
-    # seed function implementations must be idempotent.    
+
+    # seed function implementations must be idempotent.
+    @staticmethod
     def seed():
         pass
 
     def local_time_str(self, t):
         t = pytz.utc.localize(t)
-        system_tz = Settings.get_value('general_timezone')
+        system_tz = Settings.get_value_by_key('general_timezone')
         t = t.astimezone(pytz.timezone(system_tz))
         return t.strftime("%Y-%m-%d, %H:%M:%S %Z")
+
+class KeyValuePairTypes(BaseModel):
+    """Key Value Pair"""
+    name = TextField(null=False)
+
+    @staticmethod
+    def seed():
+        KeyValuePairTypes.get_or_create(name="bool")
+        KeyValuePairTypes.get_or_create(name="dict")
+        KeyValuePairTypes.get_or_create(name="int")
+        KeyValuePairTypes.get_or_create(name="float")
+        KeyValuePairTypes.get_or_create(name="str")
+
+    # Each supported kvp type needs a function to convert the string representation of the
+    # value to the appropriate type.  These functions need to have the format: _as_<type>()
+    @staticmethod
+    def _as_bool(value):
+        """Internal method to convert value to boolean"""
+        return value == "True"
+
+    @staticmethod
+    def _as_int(value):
+        """Internal method to convert value to int"""
+        return int(value)
+    
+    @staticmethod
+    def _as_float(value):
+        """Internal method to convert value to float"""
+        return float(value)
+
+    @staticmethod
+    def _as_str(value):
+        """Internal method to convert value to str"""
+        return str(value)
+
+    @staticmethod
+    def _as_dict(value):
+        """Internal method to convert value to dict"""
+        return ast.literal_eval(value)
+
+class KeyValuePair(BaseModel):
+    """Generic class implementing Key-Value pair tables"""
+    #This is not actually a table, but a class defining a set of functionalities for a table type.
+
+    key = TextField(null=False)
+    value = TextField(null=False)
+    kvp_type = ForeignKeyField(KeyValuePairTypes)
+
+    @classmethod
+    def upsert_kvp(cls, key, value, as_type=str):
+        """generic upsert function"""
+        try:
+            with database.atomic():
+                kvp_type = KeyValuePairTypes.get(KeyValuePairTypes.name==as_type.__name__)
+                #Upsert
+                obj, created = cls.get_or_create(
+                    key=key,
+                    defaults={'value': value, 'kvp_type_id': kvp_type}
+                )
+                if not created:
+                    obj.value = value
+                    obj.kvp_type_id = kvp_type
+                    obj.save()
+        except IntegrityError:
+            pass
+
+    @classmethod
+    def insert_kvp(cls, key, value, as_type=str):
+        """insert (key, value) pair into settings table if key not present.
+        Returns true if actually created."""
+        kvp_type = KeyValuePairTypes.get(KeyValuePairTypes.name==as_type.__name__)
+        obj, created = cls.get_or_create(
+            key=key,
+            defaults={'value': value, 'kvp_type_id': kvp_type}
+        )
+        return created
         
+    @classmethod
+    def get_value_by_key(cls, key):
+        # Get value
+        try:         
+            kvp = cls.select(cls, KeyValuePairTypes.name.alias('type_name')) \
+                     .join(KeyValuePairTypes, on=KeyValuePairTypes.id==cls.kvp_type_id) \
+                     .where(cls.key == key).objects().get()
+        except cls.DoesNotExist:
+            return None
+        # Cast to appropriate type
+        type_cast_fn_name = "_as_%s" % kvp.type_name        
+        type_cast_fn = getattr(KeyValuePairTypes, type_cast_fn_name)
+        return type_cast_fn(kvp.value)
+              
 class Roles(BaseModel):
     name = TextField()
 
+    @staticmethod
     def seed():
-        name, created = Roles.get_or_create(name="admin")
-        name, created = Roles.get_or_create(name="user")
+        Roles.get_or_create(name="admin")
+        Roles.get_or_create(name="user")
 
 class Sessions(BaseModel):
     description = TextField(null=True)
     started_at = DateTimeField(null=False, default=datetime.datetime.utcnow)
-    ended_at   = DateTimeField(null=True)
+    ended_at = DateTimeField(null=True)
     image_start = IntegerField(unique=True, null=False, constraints=[Check('image_start >= 0')])
-    image_end   = IntegerField(unique=True, null=True,  constraints=[Check('image_end >= -1')])
-    
+    image_end = IntegerField(unique=True, null=True, constraints=[Check('image_end >= -1')])
+
     def num_frames(self):
-        """Returns the number of frames in this session.  If the session is not complete, the number of frames so far is used."""
-        image_end = self.image_end 
+        """Returns the number of frames in this session.  If the session is not complete,
+        the number of frames so far is used."""
+        image_end = self.image_end
         if image_end is None:
             image_end = States.get_image_num()
         # image_start / image_end are inclusive.
         return (image_end - self.image_start) + 1
 
     def offset(self, string=False):
-        """Returns a float representing the offset of session (in seconds) from start of video given current framerate"""
-        frame_rate =  float(Settings.get_value('encoder_video_frame_rate'))
+        """Returns a float representing the offset of session (in seconds) from start
+        of video given current framerate"""
+        frame_rate = Settings.get_value_by_key('encoder_video_frame_rate')
         seconds = self.image_start * (1.0 / frame_rate)
         if string:
             hours = int(seconds / 3600)
@@ -66,10 +162,11 @@ class Sessions(BaseModel):
             seconds = int(seconds)
             return "%02d:%02d:%02d" % (hours, minutes, seconds)
         return seconds
-    
+
     def duration(self, string=False):
-        """Return the duration of the session as a number of hours. If the session is not complete (ended_at is NULL), now() is used instead. Returns a float, unless string==True"""
-        ended_at = self.ended_at 
+        """Return the duration of the session as a number of hours. If the session is not complete
+        (ended_at is NULL), now() is used instead. Returns a float, unless string==True"""
+        ended_at = self.ended_at
         if ended_at is None:
             ended_at = datetime.datetime.utcnow()
         delta = ended_at - self.started_at
@@ -77,14 +174,17 @@ class Sessions(BaseModel):
         if string:
             return "%2.1f" % hours
         return hours
-    
+
+    @staticmethod
     def end_session(description):
+        """Mark the currentl active session as ended by setting the ended_at time and description"""
         try:
             with database.atomic():
                 try:
                     session = Sessions.get(Sessions.ended_at.is_null())
                     image_num = States.get_image_num()
-                    # If the image number hasnt been incremented, then this session contains no images.
+                    # If the image number hasnt been incremented,
+                    # then this session contains no images.
                     if session.image_start == image_num:
                         session.delete_instance()
                         return
@@ -97,16 +197,20 @@ class Sessions(BaseModel):
                     pass
         except IntegrityError:
             pass
+    @staticmethod
     def start_session():
-        image_num = States.get_image_num()
-        session, created = \
-            Sessions.get_or_create(image_start=image_num, defaults={ \
-                                                                     'image_end' : None,
-                                                                     'started_at':datetime.datetime.utcnow(),
-                                                                     'ended_at':None,
-                                                                     'description':None, }
-            )
-        
+        try:
+            with database.atomic():
+                image_num = States.get_image_num()
+                defaults = {
+                    'image_end' : None,
+                    'started_at' : datetime.datetime.utcnow(),
+                    'ended_at' : None,
+                    'description' : None,
+                }
+                Sessions.get_or_create(image_start=image_num, defaults=defaults)
+        except IntegrityError:
+            pass
 # the user model specifies its fields (or columns) declaratively, like django
 class Users(BaseModel):
     username = CharField(unique=True, null=False)
@@ -114,21 +218,24 @@ class Users(BaseModel):
     email = CharField(null=False, unique=True)
     join_date = DateTimeField(default=datetime.datetime.utcnow)
     role = ForeignKeyField(Roles)
-    
+
+    @staticmethod
     def seed():
+        """seed Users table with admin user"""
         # Load config from yaml
         yaml_config = config.load_config()
 
-        admin_role = Roles.get(Roles.name=="admin")
+        admin_role = Roles.get(Roles.name == "admin")
         # Create admin user
-        user, created = Users.get_or_create(
-            username = yaml_config['admin_username'],
-            defaults={
-                'password': encode_pw(yaml_config['admin_password']),
-                'email' : yaml_config['admin_email'],
-                'join_date' : datetime.datetime.now(pytz.UTC),
-                'role' : admin_role
-            }
+        defaults = {
+            'password': encode_pw(yaml_config['admin_password']),
+            'email' : yaml_config['admin_email'],
+            'join_date' : datetime.datetime.now(pytz.UTC),
+            'role' : admin_role
+        }
+        Users.get_or_create(
+            username=yaml_config['admin_username'],
+            defaults=defaults
         )
 
     # it often makes sense to put convenience methods on model instances, for
@@ -142,12 +249,14 @@ class Users(BaseModel):
                 .order_by(Users.username))
 
     def is_role(self, role):
+        """Checks if user has the specified role string"""
         return (Users
                 .select()
-                .join(Roles, on=(Users.role_id ==Roles.id))
+                .join(Roles, on=(Users.role_id == Roles.id))
                 .where(Roles.name == role).exists())
-    
+
     def followers(self):
+        """Returns list of followers of user"""
         return (Users
                 .select()
                 .join(Relationships, on=Relationships.from_user)
@@ -163,6 +272,7 @@ class Users(BaseModel):
                 .exists())
 
     def gravatar_url(self, size=80):
+        """Returns gravatar URL for user."""
         return 'http://www.gravatar.com/avatar/%s?d=identicon&s=%d' % \
             (md5(self.email.strip().lower().encode('utf-8')).hexdigest(), size)
 
@@ -190,86 +300,51 @@ class Messages(BaseModel):
     content = TextField()
     pub_date = DateTimeField(default=datetime.datetime.utcnow)
 
-class States(BaseModel):
-    key = TextField(null=False)
-    value = TextField(null=False)
+class States(KeyValuePair):
+    """States object for storing persistent system state"""
 
-    def upsert(key, value):
-        upsert_helper(States, key, value)
-
-    def get_value(key):
-        with database.atomic():
-            try:
-                val = States.get(States.key==key).value
-            except States.DoesNotExist:
-                val = None
-        return val
-    def get_int_value(key):
-        val = States.get_value(key)
-        if val is not None:
-            val = int(val)
-        return val
-    
+    @staticmethod
     def set_image_num(num):
-        States.upsert("image_num", num)
+        States.upsert_kvp("image_num", num, as_type=int)
 
+    @staticmethod
     def set_seg_num(num):
-        States.upsert("seg_num", num)
+        States.upsert_kvp("seg_num", num, as_type=int)
 
+    @staticmethod
     def get_image_num():
-        return States.get_int_value("image_num")
+        return States.get_value_by_key("image_num")
 
+    @staticmethod
     def get_seg_num():
-        return States.get_int_value("seg_num")
+        return States.get_value_by_key("seg_num")
 
-class Settings(BaseModel):
-    key = TextField(null=False)
-    value = TextField(null=False)
+class Settings(KeyValuePair):
+    """Settings object for storing system settings"""
 
-    def get_value(key, type=str):
-        value = Settings.get(Settings.key==key).value
-        if type == bool:
-            return value == "True"
-        if type == int:
-            return int(value)
-        if type == float:
-            return float(value)
-        if type == dict:
-            return ast.literal_eval(value)
-        return str(value)
-
-    def upsert(key, value):
-        upsert_helper(Settings, key, value)
-
-    def insert_row(key, value):
-        """insert (key,value) into settings table if not present.  Returns true if actually created."""
-        try:
-            with database.atomic():
-                #Upsert
-                setting, created = Settings.get_or_create(
-                    key=key,
-                    defaults={'value': value}
-                )
-                return created
-        except IntegrityError:
-            pass
-
+    @staticmethod
     def seed():
         # Load config from yaml
         yaml_config = config.load_config()
-        
+
         for key, value in yaml_config.items():
-            # skip admin related
-            if "admin" in key:
+            # skip admin related since that belongs in the user table
+            # skip webserver_secret as this should never be in the yaml file
+            if key in ["admin_username", "admin_password", "admin_email", "webserver_secret"]:
                 continue
             # Create setting
-            Settings.insert_row(key, value)
+            Settings.insert_kvp(key, value, as_type=type(value))
+        # Seed with secret key for session signing
+        secret = os.urandom(32).decode('unicode_escape')
+        Settings.insert_kvp('webserver_secret', secret, as_type=str)
+
 
 
 # simple utility function to create and seed tables
 def create_tables():
+    """Create all tables in database"""
     # Tables need to be listed such that tables referening other tables are at the end
-    tables = [Roles, Users, Relationships, Messages, Settings, Sessions, States]
+    tables = [KeyValuePairTypes, Roles, Users, Relationships, Messages, Settings, Sessions, States]
 
     def seed_tables(tables):
         for table in tables:
@@ -280,16 +355,3 @@ def create_tables():
     # Seed
     seed_tables(tables)
 
-    
-def upsert_helper(table, key, value):
-    try:
-        with database.atomic():
-            #Upsert
-            setting, created = table.get_or_create(
-                key=key,
-                defaults={'value': value}
-            )
-            setting.value = value
-            setting.save()
-    except IntegrityError:
-        pass

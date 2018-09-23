@@ -10,24 +10,17 @@ from flask import request
 from flask import session
 from flask import url_for, abort, render_template, flash, send_from_directory
 from functools import wraps
-from peewee import *
 import config
-from hashlib import md5
 
 from pw import encode_pw
-from db_model import *
+from db_model import create_tables, Roles, Users, Relationships, Messages, Settings, Sessions, States #,KeyValuePairTypes
 
 import psutil
 import pi_psutil
 
-# config - aside from our database, the rest is for use by Flask
-DEBUG = True
-SECRET_KEY = 'hin6bab8ge25*r=x&amp;+5$0kn=-#log$pt^#@vrqjld!^2ci@g*b'
-
 # create a flask application - this ``app`` object will be used to handle
 # inbound requests, routing them to the proper 'view' functions, etc
 app = Flask(__name__)
-app.config.from_object(__name__)
     
 # flask provides a "session" object, which allows us to store information across
 # requests (stored by default in a secure cookie).  this function allows us to
@@ -128,11 +121,6 @@ def homepage():
 @app.route('/latest_video/')
 @login_required
 def latest_video():
-    # the private timeline exemplifies the use of a subquery -- we are asking for
-    # messages where the person who created the message is someone the current
-    # user is following.  these messages are then ordered newest-first.
-    user = get_current_user()
-    #sessions = Sessions.select().where(Sessions.ended_at.is_null(False)).order_by(Sessions.started_at.desc())
     sessions = Sessions.select().where(Sessions.ended_at.is_null(False))
 
     stats = get_system_stats()
@@ -146,7 +134,7 @@ def public_timeline():
 
 @app.route('/videos/<path:path>', methods=['GET'])
 def videos(path):
-    static_url_path=Settings.get_value('encoder_video_path')
+    static_url_path=Settings.get_value_by_key('encoder_video_path')
     if not os.path.isfile(os.path.join(static_url_path, path)):
         path = os.path.join(path, 'index.html')
         
@@ -208,9 +196,9 @@ def get_system_stats():
     TIME_FORMAT = "%Y-%m-%d, %H:%M:%S %Z"
     
     # Get last update of video
-    video_path = Settings.get_value('encoder_video_path') + '/' + Settings.get_value('encoder_video_output_filename')
+    video_path = Settings.get_value_by_key('encoder_video_path') + '/' + Settings.get_value_by_key('encoder_video_output_filename')
 
-    system_tz = Settings.get_value('general_timezone')
+    system_tz = Settings.get_value_by_key('general_timezone')
     try:
         update_time = os.path.getmtime(video_path)
         update_time =  pytz.utc.localize(datetime.datetime.utcfromtimestamp(update_time))
@@ -224,7 +212,7 @@ def get_system_stats():
     stats['now'] = now.strftime(TIME_FORMAT)
     
     # Get capture status
-    capture = Settings.get_value('capture_enable', type=bool)
+    capture = Settings.get_value_by_key('capture_enable')
     if capture:
         capture='<font size="4" color="red">Recording</font>'
     else:
@@ -277,8 +265,8 @@ def get_system_stats():
 @admin_required
 def admin():
     # Get forms for all settings and make available to render
-    settings = Settings.select().order_by(Settings.key)
-    forms = [ {'key': s.key, 'title': config.get_title(s.key), 'help': config.get_help(s.key), 'form': config.get_form_html(s.key, s.value) } for s in settings]
+    all_settings = Settings.select().order_by(Settings.key)
+    forms = [ {'key': s.key, 'title': config.get_title(s.key), 'help': config.get_desc(s.key), 'form': config.get_form_html(s.key, s.value) } for s in all_settings]
     # render page
     return render_template('admin.html', stats=get_system_stats(), setting_forms=forms, Settings=Settings)
 
@@ -288,7 +276,8 @@ def admin():
 def settings():
     if request.method == 'POST':
         for k,v in request.form.items():
-            Settings.upsert(k,v)
+            Settings.upsert_kvp(k,v)
+        update_flask_settings()
         flash('Updated')
 
     return admin()
@@ -356,7 +345,7 @@ def user_unfollow(username):
 def post():
     user = get_current_user()
     if request.method == 'POST' and request.form['content']:
-        message = Messages.create(
+        Messages.create(
             user=user,
             content=request.form['content'],
             pub_date=datetime.datetime.now())
@@ -370,7 +359,7 @@ def post():
 @login_required
 @admin_required
 def startCapture():
-    Settings.upsert('capture_enable', True)
+    Settings.upsert_kvp('capture_enable', True)
     flash('Capture started.')
     return redirect(url_for('admin'))
 
@@ -378,7 +367,7 @@ def startCapture():
 @login_required
 @admin_required
 def stopCapture():
-    Settings.upsert('capture_enable', False)
+    Settings.upsert_kvp('capture_enable', False)
     flash('Capture stopped.')
 
     Sessions.end_session(description=request.form['session_description'])
@@ -407,12 +396,22 @@ def _inject_user():
     except Users.DoesNotExist:
         return {}
 
-# allow running from the command line
+def update_flask_settings():
+    debug = Settings.get_value_by_key('webserver_debug')
+    secret = Settings.get_value_by_key('webserver_secret')
+    
+    app.config.update(
+        DEBUG=debug,
+        SECRET_KEY=secret
+    )
+
+    # allow running from the command line
 if __name__ == '__main__':
     # Create and seed tables
     create_tables()
 
+    update_flask_settings()
+    
     app.run(host="0.0.0.0",
-            debug=False, # Debug mode consumes noticibly more CPU
             port=5000
     )
