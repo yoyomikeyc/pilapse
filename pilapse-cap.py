@@ -195,7 +195,7 @@ def set_camera_options(camera):
     return camera
 
 
-def batch_capture(camera, path, batch_size, last_capture_time, interval):
+def batch_capture(camera, path, batch_size, last_capture_time, interval, backup, cleanup):
     """Capture up to batch_size images at interval seconds apart into path with filenames indexed starting at image_num"""
     image_num = States.get_image_num()
     cnt = image_num % batch_size
@@ -204,7 +204,9 @@ def batch_capture(camera, path, batch_size, last_capture_time, interval):
     # Init time markers
     if last_capture_time is None:
         last_capture_time = datetime.now()
-    next_capture_time = last_capture_time + interval
+
+    delta = timedelta(seconds=interval)
+    next_capture_time = last_capture_time + delta
 
     # Capture images
     while cnt < batch_size:
@@ -231,16 +233,16 @@ def batch_capture(camera, path, batch_size, last_capture_time, interval):
             continue
 
         # backup image to server if specified
-        if Settings.get_value_by_key('backup_enable'):
+        if backup:
             backup_image(image_abs_fn)
                 
         # delete any old image(s)
-        if Settings.get_value_by_key('backup_enable_image_cleanup'):
+        if cleanup:
             delete_old_images(image_num)
 
         # Book keeping
         last_capture_time = now
-        next_capture_time = last_capture_time + interval
+        next_capture_time = last_capture_time + delta
         image_num += 1
         States.set_image_num(image_num)
         cnt+=1
@@ -330,7 +332,7 @@ def gif_worker(image_path, gif_path, image_num, seg_num):
         terminate(1)
         
 def capture_loop():
-    # Get all variables incase they change later
+    # Get all variables incase they change mid capture/encoding
     image_path = Settings.get_value_by_key('capture_image_path')
     video_path = Settings.get_value_by_key('encoder_video_path')        
     gif_path = Settings.get_value_by_key('encoder_gif_path')
@@ -340,8 +342,11 @@ def capture_loop():
     encode_gif = Settings.get_value_by_key('encoder_gif_create')
     encode_video = Settings.get_value_by_key('encoder_video_create')
     seg_size = Settings.get_value_by_key('encoder_video_frames_per_segment')
-    interval = timedelta(seconds=Settings.get_value_by_key('capture_interval'))
+    interval = Settings.get_value_by_key('capture_interval')
+    backup = Settings.get_value_by_key('backup_enable')
+    cleanup = Settings.get_value_by_key('backup_enable_image_cleanup')
 
+            
     # Start up the camera.
     camera = PiCamera()
     # Init camera
@@ -362,7 +367,7 @@ def capture_loop():
                   (seg_num))
 
             # Capture n images
-            last_capture_time = batch_capture(camera, image_path, seg_size, last_capture_time, interval) 
+            last_capture_time = batch_capture(camera, image_path, seg_size, last_capture_time, interval, backup, cleanup) 
 
             if encode_gif:
                 # Start thread to run concurrently
