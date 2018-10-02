@@ -151,8 +151,8 @@ encoder_hq_video_preset: veryfast
 # True/False: Should the capture engine backup the images to a server as they are captured
 backup_enable: True
 
-# Number of images to back up at once.  Minimizes overhead of SSH connection setup
-backup_size: 2
+# Number of images to back up at once.  Minimizes overhead of connection setup
+backup_size: 1
 
 # True/False: Should the images be deleted once they are no longer needed.  Needed is defined
 # as "backed up" or "part of video encoding"
@@ -161,10 +161,8 @@ backup_enable_image_cleanup: True
 backup_server:
   # Hostname of server
   hostname: localhost
-  # User to scp as during backup
-  user: pi
-  # path on the server to scp files into. This path must already exist on server.
-  image_path: /tmp/
+  # port server is listening on
+  port: 5001
 
 #########################
 # Users

@@ -3,13 +3,13 @@ from flask import Flask
 from flask import request
 from flask import session
 from flask import abort, jsonify
+from flask import send_from_directory
+
 import threading
 from video import append_images_to_video
-
-# create a flask application - this ``app`` object will be used to handle
-# inbound requests, routing them to the proper 'view' functions, etc
-app = Flask(__name__)
-
+from flask import Flask, request, redirect, url_for
+from werkzeug.utils import secure_filename
+import os
 
 #################
 # Config
@@ -17,6 +17,10 @@ app = Flask(__name__)
 
 VIDEO_FILE_PATH="/tmp"
 IMAGE_FILE_PATH="/tmp"
+
+UPLOAD_FOLDER = IMAGE_FILE_PATH
+#'/path/to/the/uploads'
+ALLOWED_EXTENSIONS = set(['jpg', 'jpeg', 'gif'])
 
 # Error codes returned:
 
@@ -36,6 +40,12 @@ IMAGE_FILE_PATH="/tmp"
 # Globals
 #################
 is_encoding = False
+
+# create a flask application - this ``app`` object will be used to handle
+# inbound requests, routing them to the proper 'view' functions, etc
+app = Flask(__name__)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 ###################
 # Helper Functions
@@ -78,6 +88,41 @@ def encode_file(fn):
     return send_from_directory(VIDEO_FILE_PATH, fn)
 
 
+
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if request.method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            abort(400)
+        file = request.files['file']
+        # if user does not select file, browser also
+        # submit a empty part without filename
+        if file.filename == '':
+            abort(400)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            #return redirect(url_for('uploaded_file',filename=filename))
+            resp = jsonify({'message': 'File received.', 'data': {'is_encoding':is_encoding}})
+            resp.status_code = 200
+            return resp
+        abort(400)
+                             
+
+# Serving of uploaded files
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'],
+                               filename)
+
+    
 @app.route('/encode', methods=['GET', 'POST'])
 def encode():
     global is_encoding

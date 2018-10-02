@@ -8,7 +8,7 @@ from flask import g
 from flask import redirect
 from flask import request
 from flask import session
-from flask import url_for, abort, render_template, flash, send_from_directory
+from flask import url_for, abort, render_template, flash, send_from_directory, jsonify
 from functools import wraps
 import config
 
@@ -107,6 +107,13 @@ def before_request():
 def after_request(response):
     g.db.close()
     return response
+
+            
+@app.route('/healthcheck')
+def healthcheck():
+    resp = jsonify({ })
+    resp.status_code = 200
+    return resp
 
 # views -- these are the actual mappings of url to view function
 @app.route('/')
