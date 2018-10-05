@@ -56,7 +56,7 @@ def create_video(image_list_fn, output_fn, frame_rate=24, profile="baseline", pr
     # system remains usable.
     niceness="nice -n 2 "
     # -y : overwrite output file
-    cmd = 'avconv -y %s -f concat -safe 0  -i %s -profile:v %s -preset %s -vf format=yuv420p %s' % \
+    cmd = 'ffmpeg -y %s -f concat -safe 0  -i %s -profile:v %s -preset %s -vf format=yuv420p %s' % \
           (frame_rate_option, image_list_fn, profile, preset, output_fn)
     cmd = niceness+cmd
     success = run_cmd(cmd, verbose=True, msg="-->  encoding_frames() begun!")
@@ -138,7 +138,7 @@ def concat_videos(v1, v2, output_video):
         f.write("file %s\n" % (v1))
         f.write("file %s\n" % (v2))
         f.close()
-    cmd = 'avconv -f concat -safe 0  -i %s -c copy %s' % (concat_fn, output_video)
+    cmd = 'ffmpeg -f concat -safe 0  -i %s -c copy %s' % (concat_fn, output_video)
     success = run_cmd(cmd)
     if not success:
         print("Concat of %s to end of %s failed!" % (v2, v1))
